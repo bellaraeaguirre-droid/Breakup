@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>breakup. — the app that keeps you together.</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,700;0,900;1,400;1,700;1,900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --white: #FFFFFF;
+      --cream: #FDFAF5;
+      --black: #0F0F0F;
+      --red: #E63946;
+      --yellow: #FFD166;
+      --green: #06D6A0;
+      --blue: #118AB2;
+      --pink: #FF6B9D;
+      --orange: #FF9F1C;
+      --mid: #666;
+    }
+
+```
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--cream);
+  font-family: 'DM Sans', sans-serif;
+  color: var(--black);
+  overflow-x: hidden;
+  cursor: none;
+}
+
+/* custom cursor */
+.cursor {
+  width: 20px; height: 20px;
+  background: var(--red);
+  border-radius: 50%;
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s, background 0.2s, width 0.2s, height 0.2s;
+  mix-blend-mode: multiply;
+}
+
+/* NAV */
+nav {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 22px 48px;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: var(--cream);
+  border-bottom: 2px solid var(--black);
+}
+
+.nav-logo {
+  font-family: 'Fraunces', serif;
+  font-size: 22px; font-weight: 900; font-style: italic;
+  color: var(--black); letter-spacing: -0.5px;
+}
+
+.nav-logo span { color: var(--red); }
+
+.nav-links { display: flex; gap: 32px; list-style: none; }
+.nav-links a { color: var(--mid); text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.2s; }
+.nav-links a:hover { color: var(--black); }
+
+.nav-cta {
+  background: var(--black); color: var(--yellow);
+  border: 2px solid var(--black); padding: 10px 22px;
+  border-radius: 100px; font-size: 14px; font-weight: 600;
+  cursor: none; font-family: 'DM Sans', sans-serif;
+  box-shadow: 3px 3px 0 var(--red);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.nav-cta:hover { transform: translate(-2px,-2px); box-shadow: 5px 5px 0 var(--red); }
+
+/* HERO */
+.hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 120px 48px 80px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* animated background blobs */
+.blob {
+  position: absolute; border-radius: 50%;
+  filter: blur(60px); opacity: 0.35;
+  animation: blobFloat 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.blob-1 { width: 400px; height: 400px; background: var(--pink); top: -100px; left: -100px; animation-delay: 0s; }
+.blob-2 { width: 300px; height: 300px; background: var(--yellow); top: 50px; right: -50px; animation-delay: 2s; }
+.blob-3 { width: 350px; height: 350px; background: var(--green); bottom: -50px; left: 30%; animation-delay: 4s; }
+.blob-4 { width: 250px; height: 250px; background: var(--blue); bottom: 100px; right: 10%; animation-delay: 1s; }
+
+@keyframes blobFloat {
+  0%, 100% { transform: translate(0,0) scale(1); }
+  33% { transform: translate(20px,-30px) scale(1.05); }
+  66% { transform: translate(-15px,15px) scale(0.95); }
+}
+
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--yellow); color: var(--black);
+  font-size: 12px; font-weight: 700;
+  padding: 6px 16px; border-radius: 100px;
+  margin-bottom: 32px;
+  border: 2px solid var(--black);
+  box-shadow: 3px 3px 0 var(--black);
+  position: relative; z-index: 1;
+  animation: fadeUp 0.6s ease both;
+}
+
+.hero-eyebrow-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+
+.hero-headline {
+  font-family: 'Fraunces', serif;
+  font-size: clamp(72px, 10vw, 140px);
+  font-weight: 900; font-style: italic;
+  line-height: 0.9; letter-spacing: -4px;
+  color: var(--black);
+  margin-bottom: 16px;
+  position: relative; z-index: 1;
+  animation: fadeUp 0.6s ease 0.1s both;
+}
+
+.hero-headline .strike {
+  position: relative; display: inline-block;
+  color: var(--red);
+}
+
+.hero-headline .strike::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%; height: 6px;
+  background: var(--black);
+  transform: rotate(-2deg);
+  border-radius: 3px;
+}
+
+.hero-tagline {
+  font-family: 'Fraunces', serif;
+  font-size: clamp(18px, 2.5vw, 28px);
+  font-weight: 400; font-style: italic;
+  color: var(--mid); margin-bottom: 16px;
+  position: relative; z-index: 1;
+  animation: fadeUp 0.6s ease 0.2s both;
+}
+
+.hero-sub {
+  font-size: 16px; color: var(--mid); line-height: 1.6;
+  max-width: 520px; margin: 0 auto 40px;
+  position: relative; z-index: 1;
+  animation: fadeUp 0.6s ease 0.3s both;
+}
+
+.hero-sub strong { color: var(--black); font-weight: 600; }
+
+/* hero form */
+.hero-form {
+  display: flex; gap: 10px; max-width: 420px;
+  margin: 0 auto 12px;
+  position: relative; z-index: 1;
+  animation: fadeUp 0.6s ease 0.4s both;
+}
+
+.hero-form input {
+  flex: 1; padding: 14px 20px;
+  border: 2px solid var(--black); border-radius: 100px;
+  font-size: 15px; font-family: 'DM Sans', sans-serif;
+  background: var(--white); color: var(--black); outline: none;
+  box-shadow: 3px 3px 0 var(--black);
+}
+
+.hero-form input::placeholder { color: #AAA; }
+.hero-form input:focus { border-color: var(--red); box-shadow: 3px 3px 0 var(--red); }
+
+.btn-primary {
+  background: var(--black); color: var(--yellow);
+  border: 2px solid var(--black); padding: 14px 28px;
+  border-radius: 100px; font-size: 15px; font-weight: 700;
+  cursor: none; font-family: 'DM Sans', sans-serif;
+  box-shadow: 3px 3px 0 var(--red);
+  transition: transform 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+
+.btn-primary:hover { transform: translate(-2px,-2px); box-shadow: 5px 5px 0 var(--red); }
+
+.hero-note {
+  font-size: 12px; color: var(--mid);
+  position: relative; z-index: 1;
+  animation: fadeUp 0.6s ease 0.5s both;
+}
+
+/* PROOF STRIP */
+.proof {
+  background: var(--black); padding: 20px 48px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 48px; flex-wrap: wrap;
+  border-top: 2px solid var(--black);
+}
+
+.proof-item { text-align: center; }
+.proof-num { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 900; font-style: italic; color: var(--yellow); }
+.proof-label { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+.proof-div { width: 1px; height: 32px; background: rgba(255,255,255,0.15); }
+
+/* SECTIONS */
+.section { padding: 100px 48px; }
+.section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); margin-bottom: 12px; }
+
+.section-title {
+  font-family: 'Fraunces', serif;
+  font-size: clamp(36px, 4vw, 54px);
+  font-weight: 900; font-style: italic;
+  line-height: 1.05; letter-spacing: -1.5px;
+  color: var(--black); margin-bottom: 52px; max-width: 560px;
+}
+
+/* WHAT IT SHOWS */
+.shows { background: var(--yellow); border-top: 2px solid var(--black); border-bottom: 2px solid var(--black); padding: 80px 48px; }
+.shows .section-title { color: var(--black); margin-bottom: 40px; }
+.shows-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+
+.shows-card {
+  background: var(--white); border: 2px solid var(--black);
+  border-radius: 20px; padding: 22px 18px; text-align: center;
+  box-shadow: 4px 4px 0 var(--black);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.shows-card:hover { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 var(--black); }
+.shows-icon { font-size: 32px; margin-bottom: 10px; }
+.shows-title { font-family: 'Fraunces', serif; font-size: 16px; font-weight: 700; color: var(--black); margin-bottom: 4px; }
+.shows-desc { font-size: 12px; color: var(--mid); line-height: 1.5; }
+
+/* HOW IT WORKS */
+.steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+
+.step {
+  border-radius: 24px; padding: 32px 26px;
+  border: 2px solid var(--black);
+  box-shadow: 5px 5px 0 var(--black);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.step:hover { transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--black); }
+.step-1 { background: #FFE8ED; }
+.step-2 { background: #FFF8E0; }
+.step-3 { background: #E0FBF4; }
+
+.step-num { font-family: 'Fraunces', serif; font-size: 48px; font-weight: 900; font-style: italic; color: rgba(0,0,0,0.1); line-height: 1; margin-bottom: 14px; }
+.step-icon { font-size: 30px; margin-bottom: 12px; }
+.step-title { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 800; color: var(--black); margin-bottom: 8px; }
+.step-desc { font-size: 14px; color: #555; line-height: 1.6; }
+
+/* NOT SURVEILLANCE */
+.honest { background: var(--black); padding: 100px 48px; }
+.honest .section-label { color: var(--yellow); }
+.honest .section-title { color: var(--white); }
+.honest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.honest-row { display: flex; align-items: flex-start; gap: 14px; padding: 20px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; }
+.honest-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+.honest-title { font-size: 15px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+.honest-desc { font-size: 13px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+
+/* WHO */
+.who { background: var(--pink); border-top: 2px solid var(--black); border-bottom: 2px solid var(--black); padding: 80px 48px; }
+.who .section-title { color: var(--black); }
+.who-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+.who-card { background: var(--white); border: 2px solid var(--black); border-radius: 20px; padding: 26px 22px; box-shadow: 4px 4px 0 var(--black); }
+.who-icon { font-size: 28px; margin-bottom: 12px; }
+.who-title { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 800; color: var(--black); margin-bottom: 6px; }
+.who-desc { font-size: 13px; color: var(--mid); line-height: 1.6; }
+
+/* TESTIMONIALS */
+.testimonials { padding: 100px 48px; }
+.testimonials-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; }
+.testimonial { background: var(--white); border: 2px solid var(--black); border-radius: 20px; padding: 26px 22px; box-shadow: 4px 4px 0 var(--black); }
+.testimonial-stars { font-size: 14px; margin-bottom: 12px; letter-spacing: 2px; }
+.testimonial-quote { font-family: 'Fraunces', serif; font-size: 15px; font-style: italic; color: var(--black); line-height: 1.7; margin-bottom: 18px; }
+.testimonial-avatar { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--black); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; font-family: 'Fraunces', serif; flex-shrink: 0; }
+.testimonial-author { display: flex; align-items: center; gap: 10px; }
+.testimonial-name { font-size: 13px; font-weight: 700; color: var(--black); }
+.testimonial-detail { font-size: 11px; color: var(--mid); }
+
+/* FAQ */
+.faq { background: var(--green); border-top: 2px solid var(--black); padding: 100px 48px; }
+.faq .section-title { color: var(--black); }
+.faq-list { max-width: 700px; }
+.faq-item { border: 2px solid var(--black); border-radius: 16px; margin-bottom: 10px; overflow: hidden; box-shadow: 3px 3px 0 var(--black); background: var(--white); }
+.faq-q { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; cursor: none; font-size: 15px; font-weight: 700; color: var(--black); gap: 16px; }
+.faq-arrow { font-size: 18px; transition: transform 0.2s; flex-shrink: 0; }
+.faq-a { display: none; padding: 16px 22px 18px; font-size: 14px; color: var(--mid); line-height: 1.7; border-top: 1.5px solid rgba(0,0,0,0.08); }
+.faq-item.open .faq-arrow { transform: rotate(180deg); }
+.faq-item.open .faq-a { display: block; }
+
+/* CTA BANDS */
+.cta-band { padding: 56px 48px; text-align: center; border-top: 2px solid var(--black); border-bottom: 2px solid var(--black); }
+.cta-band-yellow { background: var(--yellow); }
+.cta-band-blue { background: #C8F0FF; }
+.cta-band-title { font-family: 'Fraunces', serif; font-size: 30px; font-weight: 900; font-style: italic; color: var(--black); margin-bottom: 24px; }
+.cta-band-form { display: flex; gap: 10px; max-width: 400px; margin: 0 auto 10px; }
+.cta-band-form input { flex: 1; padding: 13px 18px; border: 2px solid var(--black); border-radius: 100px; font-size: 14px; font-family: 'DM Sans', sans-serif; background: var(--white); color: var(--black); outline: none; box-shadow: 3px 3px 0 var(--black); }
+.cta-band-form button { background: var(--black); color: var(--yellow); border: 2px solid var(--black); padding: 13px 24px; border-radius: 100px; font-size: 14px; font-weight: 700; cursor: none; font-family: 'DM Sans', sans-serif; box-shadow: 3px 3px 0 var(--red); transition: transform 0.15s; white-space: nowrap; }
+.cta-band-form button:hover { transform: translate(-2px,-2px); }
+.cta-band-note { font-size: 12px; color: var(--mid); }
+
+/* LAUNCH */
+.launch { background: var(--blue); border-top: 2px solid var(--black); border-bottom: 2px solid var(--black); padding: 48px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.launch-title { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 900; font-style: italic; color: var(--white); margin-bottom: 16px; }
+.launch-items { display: flex; gap: 20px; flex-wrap: wrap; }
+.launch-item { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--white); }
+.launch-dot { width: 8px; height: 8px; border-radius: "50%"; background: var(--yellow); border-radius: 50%; }
+
+/* WAITLIST */
+.waitlist { padding: 100px 48px; text-align: center; max-width: 620px; margin: 0 auto; }
+.waitlist .section-title { margin: 0 auto 16px; }
+.waitlist-sub { font-size: 16px; color: var(--mid); margin-bottom: 40px; line-height: 1.6; }
+.waitlist-form { display: flex; gap: 10px; max-width: 400px; margin: 0 auto 12px; }
+.waitlist-input { flex: 1; padding: 14px 20px; border: 2px solid var(--black); border-radius: 100px; font-size: 15px; font-family: 'DM Sans', sans-serif; background: var(--white); color: var(--black); outline: none; box-shadow: 3px 3px 0 var(--black); }
+.waitlist-input:focus { border-color: var(--red); box-shadow: 3px 3px 0 var(--red); }
+.waitlist-input::placeholder { color: #AAA; }
+.waitlist-note { font-size: 12px; color: var(--mid); }
+.waitlist-count { display: inline-flex; align-items: center; gap: 8px; background: var(--yellow); padding: 8px 18px; border-radius: 100px; font-size: 13px; font-weight: 700; color: var(--black); margin-bottom: 28px; border: 2px solid var(--black); box-shadow: 3px 3px 0 var(--black); }
+.success-msg { display: none; font-family: 'Fraunces', serif; font-style: italic; color: var(--red); font-size: 16px; font-weight: 700; margin-top: 12px; }
+
+/* FOOTER */
+footer { background: var(--black); padding: 32px 48px; display: flex; justify-content: space-between; align-items: center; }
+.footer-logo { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 900; font-style: italic; color: var(--yellow); }
+.footer-logo span { color: var(--red); }
+.footer-note { font-size: 13px; color: rgba(255,255,255,0.35); }
+
+/* ANIMATIONS */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 768px) {
+  body { cursor: auto; }
+  .cursor { display: none; }
+  nav { padding: 16px 20px; }
+  .nav-links { display: none; }
+  .hero { padding: 100px 20px 60px; }
+  .proof { gap: 20px; padding: 20px; }
+  .proof-div { display: none; }
+  .section, .honest, .testimonials { padding: 64px 20px; }
+  .shows, .who, .faq, .launch { padding: 64px 20px; }
+  .shows-grid { grid-template-columns: repeat(2,1fr); }
+  .steps { grid-template-columns: 1fr; }
+  .who-grid { grid-template-columns: 1fr; }
+  .honest-grid { grid-template-columns: 1fr; }
+  .testimonials-grid { grid-template-columns: 1fr; }
+  .cta-band { padding: 48px 20px; }
+  .cta-band-form { flex-direction: column; }
+  .waitlist { padding: 80px 20px; }
+  .waitlist-form { flex-direction: column; }
+  footer { flex-direction: column; gap: 10px; text-align: center; padding: 24px; }
+  .hero-form { flex-direction: column; }
+}
+```
+
+  </style>
+</head>
+<body>
+
+  <div class="cursor" id="cursor"></div>
+
+  <nav>
+    <div class="nav-logo">breakup<span>.</span></div>
+    <ul class="nav-links">
+      <li><a href="#what">What it shows</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#waitlist">Join waitlist</a></li>
+    </ul>
+    <button class="nav-cta" onclick="document.getElementById('waitlist').scrollIntoView({behavior:'smooth'})">Get early access</button>
+  </nav>
+
+  <!-- HERO -->
+
+  <section class="hero">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
+
+```
+<div class="hero-eyebrow"><span class="hero-eyebrow-dot"></span>Apps. Sites. All of it. Together.</div>
+
+<h1 class="hero-headline"><span class="strike">breakup</span>.</h1>
+
+<p class="hero-tagline">the app that keeps you together.</p>
+
+<p class="hero-sub">
+  See exactly what apps and websites your partner is using, in real time.
+  <strong>Both of you opted in. Both of you see everything.</strong>
+  No secrets. No surveillance. Just honesty.
+</p>
+
+<div class="hero-form">
+  <input type="email" id="heroEmail" placeholder="your@email.com"/>
+  <button class="btn-primary" onclick="handleHero()">Join the waitlist</button>
+</div>
+<p class="hero-note">Free during beta · iOS & Android · No spam.</p>
+```
+
+  </section>
+
+  <!-- PROOF STRIP -->
+
+  <div class="proof">
+    <div class="proof-item"><div class="proof-num">142</div><div class="proof-label">couples on waitlist</div></div>
+    <div class="proof-div"></div>
+    <div class="proof-item"><div class="proof-num">2</div><div class="proof-label">platforms (iOS & Android)</div></div>
+    <div class="proof-div"></div>
+    <div class="proof-item"><div class="proof-num">100%</div><div class="proof-label">mutual consent required</div></div>
+    <div class="proof-div"></div>
+    <div class="proof-item"><div class="proof-num">$0</div><div class="proof-label">free during beta</div></div>
+  </div>
+
+  <!-- WHAT IT SHOWS -->
+
+  <div class="shows" id="what">
+    <div class="section-label">What breakup. tracks</div>
+    <div class="section-title">Apps, sites, and everything in between.</div>
+    <div class="shows-grid">
+      <div class="shows-card"><div class="shows-icon">📱</div><div class="shows-title">Social apps</div><div class="shows-desc">Instagram, TikTok, Snapchat, Twitter, and more.</div></div>
+      <div class="shows-card"><div class="shows-icon">🌐</div><div class="shows-title">Websites</div><div class="shows-desc">Every domain visited, how long, how often.</div></div>
+      <div class="shows-card"><div class="shows-icon">📺</div><div class="shows-title">Streaming</div><div class="shows-desc">Netflix, YouTube, Hulu, Twitch, and more.</div></div>
+      <div class="shows-card"><div class="shows-icon">🎮</div><div class="shows-title">Gaming & more</div><div class="shows-desc">Discord, games, any app using the internet.</div></div>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+
+  <section class="section" id="how">
+    <div class="section-label">How it works</div>
+    <div class="section-title">Three steps. Zero drama.</div>
+    <div class="steps">
+      <div class="step step-1">
+        <div class="step-num">01</div>
+        <div class="step-icon">📲</div>
+        <div class="step-title">Both download</div>
+        <div class="step-desc">You and your partner each download breakup. and create an account. Works on iPhone and Android. This only activates if both of you choose to share.</div>
+      </div>
+      <div class="step step-2">
+        <div class="step-num">02</div>
+        <div class="step-icon">🔗</div>
+        <div class="step-title">Connect together</div>
+        <div class="step-desc">Pair your accounts with a shared code. Both phones enable a lightweight profile that logs app and site activity as you browse.</div>
+      </div>
+      <div class="step step-3">
+        <div class="step-num">03</div>
+        <div class="step-icon">👀</div>
+        <div class="step-title">See everything</div>
+        <div class="step-desc">View each other's apps and sites in real time. You see their data exactly the way they see yours. Always symmetric. Always mutual.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA BAND 1 -->
+
+  <div class="cta-band cta-band-yellow">
+    <div class="cta-band-title">Ready to stop wondering?</div>
+    <div class="cta-band-form">
+      <input type="email" id="band1Email" placeholder="your@email.com"/>
+      <button onclick="handleBand('band1Email','band1Success')">Join free</button>
+    </div>
+    <div id="band1Success" style="display:none;color:var(--red);font-weight:700;font-style:italic;font-family:'Fraunces',serif;margin-top:8px;font-size:16px;">✓ You're on the list!</div>
+    <div class="cta-band-note">Free during beta. No spam.</div>
+  </div>
+
+  <!-- WHO -->
+
+  <div class="who">
+    <div class="section-label">Who it's for</div>
+    <div class="section-title">You're not alone in this.</div>
+    <div class="who-grid">
+      <div class="who-card"><div class="who-icon">💔</div><div class="who-title">Rebuilding after betrayal</div><div class="who-desc">Had a breach of trust? breakup. gives you both a way to show honesty without just asking for it.</div></div>
+      <div class="who-card"><div class="who-icon">📵</div><div class="who-title">Tired of phone jealousy</div><div class="who-desc">Silent tension over what they're doing on their phone. breakup. replaces that anxiety with actual transparency.</div></div>
+      <div class="who-card"><div class="who-icon">🌱</div><div class="who-title">Building better habits</div><div class="who-desc">Both want less doomscrolling and more presence? Shared accountability is the most powerful behavior change tool there is.</div></div>
+    </div>
+  </div>
+
+  <!-- NOT SURVEILLANCE -->
+
+  <div class="honest">
+    <div class="section-label">Let's be direct</div>
+    <div class="section-title">This isn't spyware. Here's the difference.</div>
+    <div class="honest-grid">
+      <div class="honest-row"><div class="honest-icon">✅</div><div><div class="honest-title">Both people download the same app</div><div class="honest-desc">No hidden version. You and your partner install the exact same app and see the exact same thing.</div></div></div>
+      <div class="honest-row"><div class="honest-icon">✅</div><div><div class="honest-title">Sharing requires mutual consent</div><div class="honest-desc">Nothing is shared until both partners explicitly opt in. One person cannot activate it for the other.</div></div></div>
+      <div class="honest-row"><div class="honest-icon">✅</div><div><div class="honest-title">Either person can pause anytime</div><div class="honest-desc">No questions asked. If you want to stop sharing, you can. Your partner is notified immediately.</div></div></div>
+      <div class="honest-row"><div class="honest-icon">✅</div><div><div class="honest-title">You see their data, they see yours</div><div class="honest-desc">Always symmetric. There's no "watcher" and "watched." Both people have identical visibility.</div></div></div>
+    </div>
+  </div>
+
+  <!-- TESTIMONIALS -->
+
+  <section class="testimonials">
+    <div class="section-label">Early feedback</div>
+    <div class="section-title">What beta users are saying.</div>
+    <div class="testimonials-grid">
+      <div class="testimonial">
+        <div class="testimonial-stars">★★★★★</div>
+        <div class="testimonial-quote">"We both agreed to try it for a month. Way less passive aggression. It completely changed how we talk about screen time."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar" style="background:#FFE8ED;">A</div>
+          <div><div class="testimonial-name">Aisha & Marcus</div><div class="testimonial-detail">Together 3 years · Los Angeles</div></div>
+        </div>
+      </div>
+      <div class="testimonial">
+        <div class="testimonial-stars">★★★★★</div>
+        <div class="testimonial-quote">"My partner had anxiety about what I was doing online. This basically made that disappear. We both feel so much better."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar" style="background:#E0FBF4;">J</div>
+          <div><div class="testimonial-name">Jake & Riley</div><div class="testimonial-detail">Together 1 year · Chicago</div></div>
+        </div>
+      </div>
+      <div class="testimonial">
+        <div class="testimonial-stars">★★★★☆</div>
+        <div class="testimonial-quote">"Honestly I was skeptical but it works exactly as described. We both see the same thing. No weirdness, no power imbalance."</div>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar" style="background:#FFF8E0;">S</div>
+          <div><div class="testimonial-name">Sofia & Dev</div><div class="testimonial-detail">Together 2 years · New York</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA BAND 2 -->
+
+  <div class="cta-band cta-band-blue">
+    <div class="cta-band-title">Sounds like something you need?</div>
+    <div class="cta-band-form">
+      <input type="email" id="band2Email" placeholder="your@email.com"/>
+      <button onclick="handleBand('band2Email','band2Success')">Get early access</button>
+    </div>
+    <div id="band2Success" style="display:none;color:var(--red);font-weight:700;font-style:italic;font-family:'Fraunces',serif;margin-top:8px;font-size:16px;">✓ You're on the list!</div>
+    <div class="cta-band-note">Free during beta. No spam.</div>
+  </div>
+
+  <!-- LAUNCH INFO -->
+
+  <div class="launch">
+    <div>
+      <div class="launch-title">What to expect when you join</div>
+      <div class="launch-items">
+        <div class="launch-item"><span class="launch-dot"></span>Free during beta (launching summer 2026)</div>
+        <div class="launch-item"><span class="launch-dot"></span>iOS & Android at launch</div>
+        <div class="launch-item"><span class="launch-dot"></span>Freemium after launch, couples pricing</div>
+        <div class="launch-item"><span class="launch-dot"></span>Early access members get first beta spots</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+
+  <div class="faq" id="faq">
+    <div class="section-label">Questions</div>
+    <div class="section-title">Things people ask.</div>
+    <div class="faq-list">
+      <div class="faq-item open">
+        <div class="faq-q" onclick="toggleFaq(this)">What exactly does it show, apps or just websites? <span class="faq-arrow">↓</span></div>
+        <div class="faq-a">Both. breakup. shows which apps are actively using the internet (Instagram, TikTok, YouTube, games, Discord, etc.) and which websites are being visited, along with how long and how often. It's a full picture, not just browser history.</div>
+      </div>
+      <div class="faq-item open">
+        <div class="faq-q" onclick="toggleFaq(this)">Can my partner see it without me knowing? <span class="faq-arrow">↓</span></div>
+        <div class="faq-a">No. Sharing requires both people to download the same app, create accounts, and actively pair together. Your partner cannot activate this without your explicit participation.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">Does it show private or incognito browsing? <span class="faq-arrow">↓</span></div>
+        <div class="faq-a">Private/incognito browsing is not tracked by default. We built it this way intentionally so both partners feel genuinely comfortable opting in, not pressured.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">Does it drain my battery or slow my phone? <span class="faq-arrow">↓</span></div>
+        <div class="faq-a">breakup. runs as a lightweight background profile. Battery and performance impact is minimal, similar to any standard VPN or parental control profile.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">What if I want to stop sharing? <span class="faq-arrow">↓</span></div>
+        <div class="faq-a">You can pause sharing anytime from the app with one tap. Your partner will be notified that you've paused, but won't see why. No punishment, no lock-in.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">Is this legal? <span class="faq-arrow">↓</span></div>
+        <div class="faq-a">Yes. Because both parties explicitly consent and both see the same data, breakup. operates entirely within legal boundaries in all US states. It's fundamentally different from covert monitoring apps, which are illegal in most jurisdictions.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINAL WAITLIST -->
+
+  <section class="waitlist" id="waitlist">
+    <div class="waitlist-count">🎉 142 couples already waiting</div>
+    <div class="section-title">Ready to be honest?</div>
+    <p class="waitlist-sub">Join the waitlist and get early access when we launch this summer. Free during beta.</p>
+    <div class="waitlist-form">
+      <input class="waitlist-input" type="email" id="emailInput" placeholder="your@email.com"/>
+      <button class="btn-primary" onclick="handleSubmit()">Join</button>
+    </div>
+    <div class="waitlist-note">Free during beta · iOS & Android · No spam.</div>
+    <div class="success-msg" id="successMsg">✓ You're on the list. See you on the other side.</div>
+  </section>
+
+  <footer>
+    <div class="footer-logo">breakup<span>.</span></div>
+    <div class="footer-note">The app that keeps you together. © 2026 breakup.</div>
+  </footer>
+
+  <script>
+    // cursor
+    const cursor = document.getElementById('cursor');
+    document.addEventListener('mousemove', e => {
+      cursor.style.left = e.clientX + 'px';
+      cursor.style.top = e.clientY + 'px';
+    });
+    document.querySelectorAll('a, button, .faq-q, .shows-card, .step, .who-card, .testimonial').forEach(el => {
+      el.addEventListener('mouseenter', () => { cursor.style.width = '40px'; cursor.style.height = '40px'; cursor.style.background = 'var(--yellow)'; });
+      el.addEventListener('mouseleave', () => { cursor.style.width = '20px'; cursor.style.height = '20px'; cursor.style.background = 'var(--red)'; });
+    });
+
+    function handleSubmit() {
+      const input = document.getElementById('emailInput');
+      const msg = document.getElementById('successMsg');
+      if (!input.value || !input.value.includes('@')) { input.style.borderColor = 'var(--red)'; setTimeout(() => input.style.borderColor = 'var(--black)', 1000); return; }
+      document.querySelector('.waitlist-form').style.display = 'none';
+      msg.style.display = 'block';
+    }
+
+    function handleHero() {
+      const input = document.getElementById('heroEmail');
+      if (!input.value || !input.value.includes('@')) { input.style.borderColor = 'var(--red)'; setTimeout(() => input.style.borderColor = 'var(--black)', 1000); return; }
+      input.parentElement.innerHTML = '<div style="font-family:Fraunces,serif;font-style:italic;color:var(--red);font-size:18px;font-weight:700;padding:14px 0;">✓ You\'re on the list!</div>';
+    }
+
+    function handleBand(inputId, successId) {
+      const input = document.getElementById(inputId);
+      if (!input.value || !input.value.includes('@')) { input.style.borderColor = 'var(--red)'; setTimeout(() => input.style.borderColor = 'var(--black)', 1000); return; }
+      input.parentElement.style.display = 'none';
+      document.getElementById(successId).style.display = 'block';
+    }
+
+    function toggleFaq(el) { el.parentElement.classList.toggle('open'); }
+
+    // scroll animations
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.style.opacity = 1; e.target.style.transform = 'translateY(0)'; }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.step, .who-card, .testimonial, .shows-card, .honest-row').forEach(el => {
+      el.style.opacity = 0;
+      el.style.transform = 'translateY(20px)';
+      el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+      observer.observe(el);
+    });
+  </script>
+
+</body>
+</html>
