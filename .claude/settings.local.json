@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\bella\\\\breakup\" -Recurse -Force)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\bella\\\\breakup\" | Where-Object { $_.Name -notmatch '^node_modules|^\\\\.git|^\\\\.expo' } | Select-Object Name, PSIsContainer)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\bella\\\\breakup\" | Where-Object { -not $_.PSIsContainer } | Select-Object Name)",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\bella\\\\breakup\\\\app\")",
+      "Bash(Select-Object Name, Length)",
+      "Bash(npm install *)"
+    ]
+  }
+}
