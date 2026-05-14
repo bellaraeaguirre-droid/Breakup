@@ -43,6 +43,7 @@ export default function SignupScreen() {
     await AsyncStorage.multiSet([
       ['userId', data.id],
       ['userName', name.trim()],
+      ['userEmail', email.trim().toLowerCase()],
       ['coupleCode', coupleCode],
     ]);
 
