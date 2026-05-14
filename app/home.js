@@ -167,8 +167,41 @@ const DOMAIN_MAP = {
   'coinbase.com':    { name: 'Coinbase',     d: 'finance' },
 };
 
-// Domains that are infrastructure noise — never shown as apps.
-const IGNORED_ROOTS = new Set(['apple-dns.net', 'exp.direct']);
+// Exact root domains that are infrastructure noise — never shown as apps.
+const IGNORED_ROOTS = new Set([
+  // Apple system infrastructure
+  'apple-dns.net', 'icloud.com', 'mzstatic.com', 'aaplimg.com',
+  'ocsp.apple.com', 'push.apple.com', 'courier.push.apple.com',
+  'guzzoni.apple.com', 'xp.apple.com', 'mask.icloud.com', 'appattest.apple.com',
+  // DNS / CDN infrastructure
+  'akadns.net', 'cloudflare.net', 'fastly.net', 'amazonaws.com', 'digicert.com',
+  'nextdns.io',
+  // Analytics, tracking, crash-reporting SDKs
+  'mixpanel.com', 'braze.com', 'intercom.io', 'intercom.com',
+  'appsflyersdk.com', 'sentry.io', 'app-analytics-services.com',
+  'oauthaccountmanager.googleapis.com',
+  // Snapchat CDN (not real usage)
+  'sc-gw.com', 'sc-cdn.net',
+  // Dev / tunnel tools
+  'exp.direct',
+]);
+
+// Substrings that mark any root domain as infrastructure noise.
+const IGNORED_SUBSTRINGS = [
+  'akadns', 'aaplimg', 'mzstatic', 'phobos', 'ocsp', 'digicert',
+  'fastly', 'cloudflare', 'amazonaws', 'sentry', 'mixpanel', 'braze',
+  'intercom', 'appsflyer', 'amplitude', 'segment', 'analytics',
+  'telemetry', 'metrics', 'tracker', 'ngrok', 'exp.direct', 'localhost',
+  // "cdn" as its own word-boundary (avoid false positives like "scandinavian")
+  '.cdn.', '-cdn.', '.cdn-', 'cdn.',
+];
+
+function isIgnoredDomain(root) {
+  if (!root) return true;
+  if (IGNORED_ROOTS.has(root)) return true;
+  const lower = root.toLowerCase();
+  return IGNORED_SUBSTRINGS.some(sub => lower.includes(sub));
+}
 
 function getRootDomain(domain) {
   const parts = (domain || '').split('.');
@@ -186,7 +219,7 @@ function buildApps(entries) {
   const counts = {};
   for (const entry of entries) {
     const root = entry.root;
-    if (!root || IGNORED_ROOTS.has(root)) continue;
+    if (isIgnoredDomain(root)) continue;
     counts[root] = (counts[root] || 0) + 1;
   }
   const apps = Object.entries(counts)
