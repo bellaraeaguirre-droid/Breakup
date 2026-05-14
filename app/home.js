@@ -170,16 +170,17 @@ const DOMAIN_MAP = {
 // Exact root domains that are infrastructure noise — never shown as apps.
 const IGNORED_ROOTS = new Set([
   // Apple system infrastructure
-  'apple-dns.net', 'icloud.com', 'mzstatic.com', 'aaplimg.com',
+  'apple-dns.net', 'icloud.com', 'icloud-content.com', 'mzstatic.com', 'aaplimg.com',
   'ocsp.apple.com', 'push.apple.com', 'courier.push.apple.com',
   'guzzoni.apple.com', 'xp.apple.com', 'mask.icloud.com', 'appattest.apple.com',
-  // DNS / CDN infrastructure
-  'akadns.net', 'cloudflare.net', 'fastly.net', 'amazonaws.com', 'digicert.com',
-  'nextdns.io',
+  // DNS / CDN / cloud infrastructure
+  'akadns.net', 'akamai.net', 'akamaiedge.net', 'akamaihd.net',
+  'cloudflare.net', 'fastly.net', 'amazonaws.com', 'digicert.com',
+  'googleapis.com', 'nextdns.io',
   // Analytics, tracking, crash-reporting SDKs
   'mixpanel.com', 'braze.com', 'intercom.io', 'intercom.com',
   'appsflyersdk.com', 'sentry.io', 'app-analytics-services.com',
-  'oauthaccountmanager.googleapis.com',
+  'firebase.com', 'datadoghq.com', 'doubleverify.com', 'supabase.co',
   // Snapchat CDN (not real usage)
   'sc-gw.com', 'sc-cdn.net',
   // Dev / tunnel tools
@@ -188,13 +189,23 @@ const IGNORED_ROOTS = new Set([
 
 // Substrings that mark any root domain as infrastructure noise.
 const IGNORED_SUBSTRINGS = [
-  'akadns', 'aaplimg', 'mzstatic', 'phobos', 'ocsp', 'digicert',
-  'fastly', 'cloudflare', 'amazonaws', 'sentry', 'mixpanel', 'braze',
-  'intercom', 'appsflyer', 'amplitude', 'segment', 'analytics',
-  'telemetry', 'metrics', 'tracker', 'ngrok', 'exp.direct', 'localhost',
-  // "cdn" as its own word-boundary (avoid false positives like "scandinavian")
-  '.cdn.', '-cdn.', '.cdn-', 'cdn.',
+  // Apple / Akamai
+  'akadns', 'akamai', 'aaplimg', 'mzstatic', 'phobos', 'ocsp',
+  // Infra / security
+  'digicert', 'fastly', 'cloudflare', 'amazonaws',
+  // Analytics / tracking / crash
+  'sentry', 'mixpanel', 'braze', 'intercom', 'appsflyer',
+  'amplitude', 'segment', 'analytics', 'telemetry', 'metrics', 'tracker',
+  'firebase', 'datadog', 'googleapis', 'supabase',
+  'doubleclick', 'doubleverify', 'crashlytics', 'bugsnag', 'newrelic', 'dynatrace',
+  // CDN / delivery patterns
+  'cdn', 'delivery', 'edge', 'static', 'assets', 'media',
+  // Dev tools
+  'ngrok', 'exp.direct', 'localhost',
 ];
+
+// TikTok CDN domains that should be merged into tiktok.com instead of shown separately.
+const TIKTOK_ALIASES = new Set(['tiktokcdn-us.com', 'tiktokv.us']);
 
 function isIgnoredDomain(root) {
   if (!root) return true;
@@ -214,11 +225,13 @@ function formatMins(mins) {
 }
 
 // Build sorted app list from NextDNS log entries.
-// Every root domain appears — known ones get a mapped name+icon, unknown ones show raw domain with globe icon.
+// TikTok CDN aliases are merged into tiktok.com before filtering.
+// Known domains get a mapped name+icon; unknown ones show raw domain with globe icon.
 function buildApps(entries) {
   const counts = {};
   for (const entry of entries) {
-    const root = entry.root;
+    // Remap TikTok CDN domains to canonical tiktok.com before any filtering.
+    const root = TIKTOK_ALIASES.has(entry.root) ? 'tiktok.com' : entry.root;
     if (isIgnoredDomain(root)) continue;
     counts[root] = (counts[root] || 0) + 1;
   }
@@ -828,11 +841,15 @@ export default function HomeScreen() {
           partner: partnerRow ? { profileId: partnerRow.nextdns_profile_id, apiKey: partnerRow.nextdns_api_key } : null,
         };
 
-        const [myLogs, partnerLogs] = await Promise.all([
-          fetchNextDNSLogs(myRow?.nextdns_profile_id, myRow?.nextdns_api_key),
-          fetchNextDNSLogs(partnerRow?.nextdns_profile_id, partnerRow?.nextdns_api_key),
-        ]);
-        console.log('[HomeScreen] my logs:', myLogs?.length ?? 'null', '| partner logs:', partnerLogs?.length ?? 'null');
+        // Log each card's profile ID separately so we can verify they are different.
+        console.log('[HomeScreen] ME card     — NextDNS profileId:', myRow?.nextdns_profile_id ?? 'MISSING');
+        console.log('[HomeScreen] PARTNER card — NextDNS profileId:', partnerRow?.nextdns_profile_id ?? 'MISSING');
+
+        // Fetch each profile's logs in completely separate API calls.
+        const myLogs      = await fetchNextDNSLogs(myRow?.nextdns_profile_id, myRow?.nextdns_api_key);
+        const partnerLogs = await fetchNextDNSLogs(partnerRow?.nextdns_profile_id, partnerRow?.nextdns_api_key);
+
+        console.log('[HomeScreen] ME logs:', myLogs?.length ?? 'null', '| PARTNER logs:', partnerLogs?.length ?? 'null');
         applyLogs(myLogs, partnerLogs, myRow?.name, partnerRow?.name);
       }
 
