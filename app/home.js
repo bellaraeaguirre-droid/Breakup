@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
   Path, Circle, Ellipse, Rect, Polygon, G, Text as ST,
 } from 'react-native-svg';
+import AvatarCustom, { AVATAR_DEFAULTS } from '../components/AvatarCustom';
 
 const W = Dimensions.get('window').width;
 const CARD_W = Math.floor((W - 36) / 2);
@@ -39,6 +40,7 @@ const PEOPLE = [
     color: P.red,
     pale: P.redPale,
     lastSeenAt: null,
+    avatarConfig: { ...AVATAR_DEFAULTS, hairColor: '#E85D75', skinTone: '#FFD0DC' },
     screenTime: '4h 12m',
     streak: 12,
     avgTime: '3h 45m',
@@ -58,6 +60,7 @@ const PEOPLE = [
     color: P.blue,
     pale: P.bluePale,
     lastSeenAt: null,
+    avatarConfig: { ...AVATAR_DEFAULTS, hairStyle: 'short', hairColor: '#1A4A6A', skinTone: '#D4EEFA' },
     screenTime: '3h 47m',
     streak: 12,
     avgTime: '3h 20m',
@@ -313,48 +316,7 @@ async function fetchNextDNSLogs(profileId, apiKey) {
 }
 
 // ─── AVATARS ──────────────────────────────────────────────────────────────────
-
-const AvatarMe = ({ large = false }) => {
-  const [w, h] = large ? [112, 138] : [74, 90];
-  return (
-    <Svg width={w} height={h} viewBox="0 0 100 124" fill="none">
-      <Ellipse cx="50" cy="110" rx="28" ry="14" fill="#FFB8C8" />
-      <Circle cx="50" cy="56" r="37" fill="#FFD0DC" />
-      <Circle cx="50" cy="20" r="18" fill="#E85D75" />
-      <Ellipse cx="50" cy="36" rx="25" ry="11" fill="#E85D75" />
-      <Ellipse cx="24" cy="45" rx="9" ry="16" fill="#E85D75" />
-      <Ellipse cx="76" cy="45" rx="9" ry="16" fill="#E85D75" />
-      <Circle cx="30" cy="64" r="8" fill="#FFB8C8" opacity="0.65" />
-      <Circle cx="70" cy="64" r="8" fill="#FFB8C8" opacity="0.65" />
-      <Circle cx="41" cy="54" r="5" fill="#1C1C1E" />
-      <Circle cx="59" cy="54" r="5" fill="#1C1C1E" />
-      <Circle cx="43" cy="52" r="1.8" fill="white" />
-      <Circle cx="61" cy="52" r="1.8" fill="white" />
-      <Path d="M41 68 Q50 76 59 68" stroke="#1C1C1E" strokeWidth="2.8" fill="none" strokeLinecap="round" />
-    </Svg>
-  );
-};
-
-const AvatarDylan = ({ large = false }) => {
-  const [w, h] = large ? [112, 138] : [74, 90];
-  return (
-    <Svg width={w} height={h} viewBox="0 0 100 124" fill="none">
-      <Ellipse cx="50" cy="110" rx="28" ry="14" fill="#A8D8F0" />
-      <Circle cx="50" cy="56" r="37" fill="#D4EEFA" />
-      <Ellipse cx="50" cy="25" rx="30" ry="16" fill="#1A4A6A" />
-      <Rect x="22" y="32" width="56" height="12" fill="#1A4A6A" />
-      <Ellipse cx="19" cy="45" rx="9" ry="19" fill="#1A4A6A" />
-      <Ellipse cx="81" cy="45" rx="9" ry="19" fill="#1A4A6A" />
-      <Circle cx="30" cy="64" r="7" fill="#A8D8F0" opacity="0.75" />
-      <Circle cx="70" cy="64" r="7" fill="#A8D8F0" opacity="0.75" />
-      <Circle cx="41" cy="54" r="4.5" fill="#1C1C1E" />
-      <Circle cx="59" cy="54" r="4.5" fill="#1C1C1E" />
-      <Circle cx="42.5" cy="52.5" r="1.6" fill="white" />
-      <Circle cx="60.5" cy="52.5" r="1.6" fill="white" />
-      <Path d="M41 68 Q50 75 59 68" stroke="#1C1C1E" strokeWidth="2.8" fill="none" strokeLinecap="round" />
-    </Svg>
-  );
-};
+// Dynamic avatars rendered via AvatarCustom — see components/AvatarCustom.js
 
 // ─── ICONS ────────────────────────────────────────────────────────────────────
 
@@ -641,7 +603,6 @@ const WeekBars = ({ data, color, compact = true }) => {
 // ─── HOME CARD ────────────────────────────────────────────────────────────────
 
 const PersonCard = ({ person, onPress }) => {
-  const Char = person.id === 'me' ? AvatarMe : AvatarDylan;
   const maxM = person.apps.length > 0 ? Math.max(...person.apps.map(a => a.m)) : 1;
   const nowMs = Date.now();
   const online = person.lastSeenAt != null && (nowMs - person.lastSeenAt) < 5 * 60 * 1000;
@@ -650,7 +611,7 @@ const PersonCard = ({ person, onPress }) => {
   return (
     <TouchableOpacity style={[s.card, { width: CARD_W }]} onPress={onPress} activeOpacity={0.88}>
       <View style={[s.avatarBg, { backgroundColor: person.pale }]}>
-        <Char large={false} />
+        <AvatarCustom config={person.avatarConfig} size={74} />
       </View>
       <View style={s.nameRow}>
         <Text style={s.personName}>{person.name}</Text>
@@ -709,7 +670,6 @@ const HomeView = ({ onSelect, onSettings, people }) => (
 
 const DetailScreen = ({ person, onBack }) => {
   const [mood, setMood] = useState(null);
-  const Char = person.id === 'me' ? AvatarMe : AvatarDylan;
   const maxM = Math.max(...person.apps.map(a => a.m));
   const MOODS = ['😊', '😴', '😤', '🥰', '😅'];
 
@@ -723,7 +683,7 @@ const DetailScreen = ({ person, onBack }) => {
 
         <View style={s.hero}>
           <View style={[s.heroAvatarBg, { backgroundColor: person.pale }]}>
-            <Char large />
+            <AvatarCustom config={person.avatarConfig} size={112} />
           </View>
           <Text style={s.heroName}>{person.name}</Text>
           <View style={s.streakBadge}>
@@ -814,7 +774,7 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      function applyLogs(myLogs, partnerLogs, myName, partnerName) {
+      function applyLogs(myLogs, partnerLogs, myName, partnerName, myAvatar, partnerAvatar) {
         setPeople(prev => prev.map(p => {
           if (p.id === 'me') {
             const apps = myLogs ? buildApps(myLogs) : [];
@@ -824,6 +784,7 @@ export default function HomeScreen() {
             if (myName) update.name = myName;
             if (apps.length > 0) update.apps = apps;
             if (screenTimeMins !== null) update.screenTime = formatMins(screenTimeMins);
+            if (myAvatar) update.avatarConfig = myAvatar;
             return update;
           }
           if (p.id === 'dylan') {
@@ -834,6 +795,7 @@ export default function HomeScreen() {
             if (partnerName) update.name = partnerName;
             if (apps.length > 0) update.apps = apps;
             if (screenTimeMins !== null) update.screenTime = formatMins(screenTimeMins);
+            if (partnerAvatar) update.avatarConfig = partnerAvatar;
             return update;
           }
           return p;
@@ -845,10 +807,11 @@ export default function HomeScreen() {
         const [[, userId], [, partnerId]] = await AsyncStorage.multiGet(['userId', 'partnerId']);
         if (!userId) { console.log('[HomeScreen] no userId — using mock'); return; }
 
+        const avatarSelect = 'name, nextdns_profile_id, nextdns_api_key, hair_style, hair_color, skin_tone, eye_style, mouth_style, accessory';
         const [{ data: myRow, error: myErr }, { data: partnerRow, error: partnerErr }] = await Promise.all([
-          supabase.from('users').select('name, nextdns_profile_id, nextdns_api_key').eq('id', userId).single(),
+          supabase.from('users').select(avatarSelect).eq('id', userId).single(),
           partnerId
-            ? supabase.from('users').select('name, nextdns_profile_id, nextdns_api_key').eq('id', partnerId).single()
+            ? supabase.from('users').select(avatarSelect).eq('id', partnerId).single()
             : Promise.resolve({ data: null, error: null }),
         ]);
         if (myErr) console.log('[HomeScreen] my row error:', myErr.message);
@@ -859,6 +822,28 @@ export default function HomeScreen() {
           partner: partnerRow ? { profileId: partnerRow.nextdns_profile_id, apiKey: partnerRow.nextdns_api_key } : null,
         };
 
+        // Load my avatar from AsyncStorage (reflects edits made in Avatar Builder immediately)
+        const [[, hs], [, hc], [, st], [, es], [, ms], [, ac]] = await AsyncStorage.multiGet([
+          'avatarHairStyle', 'avatarHairColor', 'avatarSkinTone',
+          'avatarEyeStyle', 'avatarMouthStyle', 'avatarAccessory',
+        ]);
+        const myAvatar = {
+          hairStyle:  hs || myRow?.hair_style  || AVATAR_DEFAULTS.hairStyle,
+          hairColor:  hc || myRow?.hair_color  || '#E85D75',
+          skinTone:   st || myRow?.skin_tone   || '#FFD0DC',
+          eyeStyle:   es || myRow?.eye_style   || AVATAR_DEFAULTS.eyeStyle,
+          mouthStyle: ms || myRow?.mouth_style || AVATAR_DEFAULTS.mouthStyle,
+          accessory:  ac || myRow?.accessory   || AVATAR_DEFAULTS.accessory,
+        };
+        const partnerAvatar = partnerRow ? {
+          hairStyle:  partnerRow.hair_style  || AVATAR_DEFAULTS.hairStyle,
+          hairColor:  partnerRow.hair_color  || '#1A4A6A',
+          skinTone:   partnerRow.skin_tone   || '#D4EEFA',
+          eyeStyle:   partnerRow.eye_style   || AVATAR_DEFAULTS.eyeStyle,
+          mouthStyle: partnerRow.mouth_style || AVATAR_DEFAULTS.mouthStyle,
+          accessory:  partnerRow.accessory   || AVATAR_DEFAULTS.accessory,
+        } : null;
+
         // Log each card's profile ID separately so we can verify they are different.
         console.log('[HomeScreen] ME card     — NextDNS profileId:', myRow?.nextdns_profile_id ?? 'MISSING');
         console.log('[HomeScreen] PARTNER card — NextDNS profileId:', partnerRow?.nextdns_profile_id ?? 'MISSING');
@@ -868,7 +853,7 @@ export default function HomeScreen() {
         const partnerLogs = await fetchNextDNSLogs(partnerRow?.nextdns_profile_id, partnerRow?.nextdns_api_key);
 
         console.log('[HomeScreen] ME logs:', myLogs?.length ?? 'null', '| PARTNER logs:', partnerLogs?.length ?? 'null');
-        applyLogs(myLogs, partnerLogs, myRow?.name, partnerRow?.name);
+        applyLogs(myLogs, partnerLogs, myRow?.name, partnerRow?.name, myAvatar, partnerAvatar);
       }
 
       loadRealData().catch(err => console.log('[HomeScreen] error:', err.message));

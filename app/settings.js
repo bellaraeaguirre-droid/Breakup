@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import AvatarCustom, { AVATAR_DEFAULTS } from '../components/AvatarCustom';
 
 const P = {
   bg: '#F9F7FF',
@@ -29,9 +30,10 @@ export default function SettingsScreen() {
   const [saved, setSaved]         = useState(false);
   const [syncing, setSyncing]     = useState(false);
   const [syncResult, setSyncResult] = useState(null); // { count } | { error }
-  const [userId, setUserId]       = useState('');
-  const [userName, setUserName]   = useState('');
-  const [userEmail, setUserEmail] = useState('');
+  const [userId, setUserId]           = useState('');
+  const [userName, setUserName]       = useState('');
+  const [userEmail, setUserEmail]     = useState('');
+  const [avatarConfig, setAvatarConfig] = useState({ ...AVATAR_DEFAULTS });
 
   useEffect(() => {
     AsyncStorage.multiGet(['userId', 'nextdnsProfileId', 'nextdnsApiKey', 'userName', 'userEmail'])
@@ -43,6 +45,25 @@ export default function SettingsScreen() {
         if (email) setUserEmail(email);
       });
   }, []);
+
+  // Reload avatar whenever screen comes into focus (e.g. returning from Avatar Builder)
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.multiGet([
+        'avatarHairStyle', 'avatarHairColor', 'avatarSkinTone',
+        'avatarEyeStyle',  'avatarMouthStyle', 'avatarAccessory',
+      ]).then(([[, hs], [, hc], [, st], [, es], [, ms], [, ac]]) => {
+        setAvatarConfig({
+          hairStyle:  hs || AVATAR_DEFAULTS.hairStyle,
+          hairColor:  hc || AVATAR_DEFAULTS.hairColor,
+          skinTone:   st || AVATAR_DEFAULTS.skinTone,
+          eyeStyle:   es || AVATAR_DEFAULTS.eyeStyle,
+          mouthStyle: ms || AVATAR_DEFAULTS.mouthStyle,
+          accessory:  ac || AVATAR_DEFAULTS.accessory,
+        });
+      });
+    }, [])
+  );
 
   const handleSave = async () => {
     setSaving(true);
@@ -116,6 +137,22 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <Text style={s.logo}>breakup.</Text>
+
+        {/* ── Avatar ── */}
+        <TouchableOpacity
+          style={s.avatarCard}
+          onPress={() => router.push('/avatar')}
+          activeOpacity={0.88}
+        >
+          <View style={s.avatarPreviewCircle}>
+            <AvatarCustom config={avatarConfig} size={80} />
+          </View>
+          <View style={s.avatarCardText}>
+            <Text style={s.avatarCardTitle}>My Avatar</Text>
+            <Text style={s.avatarCardSub}>Tap to customize</Text>
+          </View>
+          <Text style={s.avatarChevron}>›</Text>
+        </TouchableOpacity>
 
         {/* ── Real Activity Data ── */}
         <View style={s.card}>
@@ -220,6 +257,34 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 24,
   },
+
+  avatarCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: P.white,
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  avatarPreviewCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: P.redPale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarCardText: { flex: 1, marginLeft: 16 },
+  avatarCardTitle: { fontSize: 16, fontWeight: '700', color: P.dark, marginBottom: 3 },
+  avatarCardSub:   { fontSize: 13, color: P.mid },
+  avatarChevron:   { fontSize: 24, color: P.mid, marginRight: 4 },
 
   card: {
     marginHorizontal: 16,
