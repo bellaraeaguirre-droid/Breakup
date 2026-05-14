@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
@@ -37,6 +37,7 @@ const PEOPLE = [
     name: 'You',
     color: P.red,
     pale: P.redPale,
+    lastSeenAt: null,
     screenTime: '4h 12m',
     streak: 12,
     avgTime: '3h 45m',
@@ -55,6 +56,7 @@ const PEOPLE = [
     name: 'Dylan',
     color: P.blue,
     pale: P.bluePale,
+    lastSeenAt: null,
     screenTime: '3h 47m',
     streak: 12,
     avgTime: '3h 20m',
@@ -198,6 +200,35 @@ function buildApps(entries) {
     .sort((a, b) => b.m - a.m);
   console.log('[buildApps] entries:', entries.length, '| total domains:', apps.length);
   return apps;
+}
+
+// Returns epoch-ms of the most recent log entry, or null if no valid timestamps.
+function getLastSeenAt(entries) {
+  if (!entries || entries.length === 0) return null;
+  let latest = 0;
+  for (const entry of entries) {
+    if (!entry.timestamp) continue;
+    const t = new Date(entry.timestamp).getTime();
+    if (t > latest) latest = t;
+  }
+  return latest > 0 ? latest : null;
+}
+
+// Active screen time: group today's entries into 5-min windows, count windows
+// with >= 2 entries as active, return total minutes.
+function calcScreenTimeToday(entries) {
+  if (!entries || entries.length === 0) return null;
+  const todayStartMs = new Date().setHours(0, 0, 0, 0);
+  const windows = {};
+  for (const entry of entries) {
+    if (!entry.timestamp) continue;
+    const t = new Date(entry.timestamp).getTime();
+    if (t < todayStartMs) continue;
+    const key = Math.floor(t / (5 * 60 * 1000));
+    windows[key] = (windows[key] || 0) + 1;
+  }
+  const activeWindows = Object.values(windows).filter(c => c >= 2).length;
+  return activeWindows * 5;
 }
 
 // Fetch logs from NextDNS API for a given profile. Returns null on any failure.
@@ -547,7 +578,10 @@ const WeekBars = ({ data, color, compact = true }) => {
 
 const PersonCard = ({ person, onPress }) => {
   const Char = person.id === 'me' ? AvatarMe : AvatarDylan;
-  const maxM = Math.max(...person.apps.map(a => a.m));
+  const maxM = person.apps.length > 0 ? Math.max(...person.apps.map(a => a.m)) : 1;
+  const nowMs = Date.now();
+  const online = person.lastSeenAt != null && (nowMs - person.lastSeenAt) < 5 * 60 * 1000;
+  const lastSeenMins = person.lastSeenAt != null ? Math.floor((nowMs - person.lastSeenAt) / 60000) : null;
 
   return (
     <TouchableOpacity style={[s.card, { width: CARD_W }]} onPress={onPress} activeOpacity={0.88}>
@@ -556,8 +590,11 @@ const PersonCard = ({ person, onPress }) => {
       </View>
       <View style={s.nameRow}>
         <Text style={s.personName}>{person.name}</Text>
-        <HeartIcon />
+        <HeartIcon color={online ? P.green : '#BBBBCC'} />
       </View>
+      {!online && lastSeenMins !== null && (
+        <Text style={s.lastSeen}>last seen {lastSeenMins}m ago</Text>
+      )}
       <Text style={[s.screenTime, { color: person.color }]}>{person.screenTime}</Text>
       <View style={s.barsWrap}>
         <WeekBars data={person.week} color={person.color} compact />
@@ -709,10 +746,36 @@ export default function HomeScreen() {
   const router = useRouter();
   const [selected, setSelected] = useState(null);
   const [people, setPeople] = useState(PEOPLE);
+  const credentialsRef = useRef({ my: null, partner: null });
 
-  // Runs on mount AND every time the screen regains focus (e.g. back from settings).
   useFocusEffect(
     useCallback(() => {
+      function applyLogs(myLogs, partnerLogs, myName, partnerName) {
+        setPeople(prev => prev.map(p => {
+          if (p.id === 'me') {
+            const apps = myLogs ? buildApps(myLogs) : [];
+            const screenTimeMins = myLogs ? calcScreenTimeToday(myLogs) : null;
+            const lastSeenAt = getLastSeenAt(myLogs);
+            const update = { ...p, lastSeenAt };
+            if (myName) update.name = myName;
+            if (apps.length > 0) update.apps = apps;
+            if (screenTimeMins !== null) update.screenTime = formatMins(screenTimeMins);
+            return update;
+          }
+          if (p.id === 'dylan') {
+            const apps = partnerLogs ? buildApps(partnerLogs) : [];
+            const screenTimeMins = partnerLogs ? calcScreenTimeToday(partnerLogs) : null;
+            const lastSeenAt = getLastSeenAt(partnerLogs);
+            const update = { ...p, lastSeenAt };
+            if (partnerName) update.name = partnerName;
+            if (apps.length > 0) update.apps = apps;
+            if (screenTimeMins !== null) update.screenTime = formatMins(screenTimeMins);
+            return update;
+          }
+          return p;
+        }));
+      }
+
       async function loadRealData() {
         console.log('[HomeScreen] useFocusEffect fired — loading per-user data');
         const [[, userId], [, partnerId]] = await AsyncStorage.multiGet(['userId', 'partnerId']);
@@ -726,35 +789,33 @@ export default function HomeScreen() {
         ]);
         if (myErr) console.log('[HomeScreen] my row error:', myErr.message);
         if (partnerErr) console.log('[HomeScreen] partner row error:', partnerErr.message);
-        console.log('[HomeScreen] my profileId:', myRow?.nextdns_profile_id, '| partner profileId:', partnerRow?.nextdns_profile_id);
+
+        credentialsRef.current = {
+          my: myRow ? { profileId: myRow.nextdns_profile_id, apiKey: myRow.nextdns_api_key } : null,
+          partner: partnerRow ? { profileId: partnerRow.nextdns_profile_id, apiKey: partnerRow.nextdns_api_key } : null,
+        };
 
         const [myLogs, partnerLogs] = await Promise.all([
           fetchNextDNSLogs(myRow?.nextdns_profile_id, myRow?.nextdns_api_key),
           fetchNextDNSLogs(partnerRow?.nextdns_profile_id, partnerRow?.nextdns_api_key),
         ]);
         console.log('[HomeScreen] my logs:', myLogs?.length ?? 'null', '| partner logs:', partnerLogs?.length ?? 'null');
-
-        setPeople(prev => prev.map(p => {
-          if (p.id === 'me') {
-            const apps = myLogs ? buildApps(myLogs) : [];
-            console.log('[HomeScreen] YOU — real apps:', apps.length);
-            const update = { ...p };
-            if (myRow?.name) update.name = myRow.name;
-            if (apps.length > 0) update.apps = apps;
-            return update;
-          }
-          if (p.id === 'dylan') {
-            const apps = partnerLogs ? buildApps(partnerLogs) : [];
-            console.log('[HomeScreen] PARTNER — real apps:', apps.length);
-            const update = { ...p };
-            if (partnerRow?.name) update.name = partnerRow.name;
-            if (apps.length > 0) update.apps = apps;
-            return update;
-          }
-          return p;
-        }));
+        applyLogs(myLogs, partnerLogs, myRow?.name, partnerRow?.name);
       }
+
       loadRealData().catch(err => console.log('[HomeScreen] error:', err.message));
+
+      const interval = setInterval(async () => {
+        const { my, partner } = credentialsRef.current;
+        if (!my?.profileId) return;
+        const [myLogs, partnerLogs] = await Promise.all([
+          fetchNextDNSLogs(my.profileId, my.apiKey),
+          fetchNextDNSLogs(partner?.profileId, partner?.apiKey),
+        ]);
+        applyLogs(myLogs, partnerLogs, null, null);
+      }, 60000);
+
+      return () => clearInterval(interval);
     }, [])
   );
 
@@ -809,6 +870,7 @@ const s = StyleSheet.create({
     marginBottom: 1,
   },
   personName: { fontSize: 15, fontWeight: '700', color: P.dark },
+  lastSeen: { fontSize: 9.5, color: P.mid, textAlign: 'center', marginTop: -2, marginBottom: 3 },
   screenTime: {
     fontSize: 22,
     fontWeight: '800',
