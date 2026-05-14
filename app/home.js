@@ -28,7 +28,8 @@ const P = {
   amberPale: '#FEF3C7',
 };
 
-const TODAY = 0;
+// getDay() returns 0=Sun … 6=Sat; shift to Mon=0 … Sun=6 to match DAYS array.
+const TODAY_IDX = (() => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; })();
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 const PEOPLE = [
@@ -224,9 +225,20 @@ function formatMins(mins) {
   return `${mins}m`;
 }
 
+// Returns true only if the SLD looks like a real brand name, not a CDN/hash identifier.
+// Filters: too short/long, >30% digits, 3+ consecutive digits, pure hex hash.
+function looksLikeBrand(sld) {
+  if (!sld || sld.length < 2 || sld.length > 24) return false;
+  const digits = (sld.match(/\d/g) || []).length;
+  if (digits > Math.ceil(sld.length * 0.3)) return false;
+  if (/\d{3,}/.test(sld)) return false;
+  if (/^[0-9a-f]{8,}$/i.test(sld)) return false;
+  return true;
+}
+
 // Build sorted app list from NextDNS log entries.
 // TikTok CDN aliases are merged into tiktok.com before filtering.
-// Known domains get a mapped name+icon; unknown ones show raw domain with globe icon.
+// Unknown domains only appear if they pass the looksLikeBrand heuristic.
 function buildApps(entries) {
   const counts = {};
   for (const entry of entries) {
@@ -239,12 +251,15 @@ function buildApps(entries) {
     .map(([root, count]) => {
       const mins = count * 2;
       const mapped = DOMAIN_MAP[root];
-      return mapped
-        ? { name: mapped.name, d: mapped.d, dur: formatMins(mins), m: mins }
-        : { name: root.replace(/^www\./, ''), d: 'globe', dur: formatMins(mins), m: mins };
+      if (mapped) return { name: mapped.name, d: mapped.d, dur: formatMins(mins), m: mins };
+      // Unknown domain: only show if the SLD looks like a real brand name.
+      const sld = root.split('.')[0];
+      if (!looksLikeBrand(sld)) return null;
+      return { name: root.replace(/^www\./, ''), d: 'globe', dur: formatMins(mins), m: mins };
     })
+    .filter(Boolean)
     .sort((a, b) => b.m - a.m);
-  console.log('[buildApps] entries:', entries.length, '| total domains:', apps.length);
+  console.log('[buildApps] entries:', entries.length, '| visible domains:', apps.length);
   return apps;
 }
 
@@ -583,7 +598,7 @@ const AppIcon = ({ d, s = 32 }) => {
 // ─── WEEK BARS ────────────────────────────────────────────────────────────────
 
 const WeekBars = ({ data, color, compact = true }) => {
-  const max = Math.max(...data);
+  const max = Math.max(...data) || 1; // guard against all-zero (avoids NaN from 0/0)
   const chartH = compact ? 40 : 70;
   const barW = compact ? 12 : 26;
   const gap = compact ? 5 : 9;
@@ -593,16 +608,19 @@ const WeekBars = ({ data, color, compact = true }) => {
   return (
     <Svg width={totalW} height={svgH} viewBox={`0 0 ${totalW} ${svgH}`}>
       {data.map((v, i) => {
-        const bh = Math.max(4, (v / max) * chartH);
+        const hasData = v > 0;
+        const bh = hasData ? Math.max(4, (v / max) * chartH) : 2; // 2px placeholder for no-data days
         const x = i * (barW + gap);
         const y = chartH - bh;
-        const isToday = i === TODAY;
+        const isToday = i === TODAY_IDX;
+        const barColor = isToday ? color : '#E5E0F5';
         return (
           <G key={i}>
             <Rect
               x={x} y={y} width={barW} height={bh}
               rx={barW / 2}
-              fill={isToday ? color : '#E5E0F5'}
+              fill={barColor}
+              opacity={hasData ? 1 : 0.45}
             />
             <ST
               x={x + barW / 2} y={svgH - 1}
