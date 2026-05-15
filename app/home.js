@@ -179,32 +179,44 @@ const IGNORED_ROOTS = new Set([
   'guzzoni.apple.com', 'xp.apple.com', 'mask.icloud.com', 'appattest.apple.com',
   // DNS / CDN / cloud infrastructure
   'akadns.net', 'akamai.net', 'akamaiedge.net', 'akamaihd.net',
-  'cloudflare.net', 'fastly.net', 'amazonaws.com', 'digicert.com',
-  'googleapis.com', 'nextdns.io',
+  'cloudflare.net', 'cloudfront.net', 'fastly.net', 'amazonaws.com', 'digicert.com',
+  'googleapis.com', 'nextdns.io', 'windows.net',
   // Analytics, tracking, crash-reporting SDKs
   'mixpanel.com', 'braze.com', 'intercom.io', 'intercom.com',
   'appsflyersdk.com', 'sentry.io', 'app-analytics-services.com',
   'firebase.com', 'datadoghq.com', 'doubleverify.com', 'supabase.co',
+  'pendo.io', 'googletagmanager.com', 'ampproject.org',
+  // Identity / SSO providers
+  'inscloudgate.net', 'insops.net', 'helloid.cloud', 'helloid.com',
+  // LMS / education portals
+  'canvaslms.com', 'instructure.com',
+  // Screen-time monitor app (its own traffic)
+  'stayfreeapps.com',
   // Snapchat CDN (not real usage)
   'sc-gw.com', 'sc-cdn.net',
-  // Dev / tunnel tools
-  'exp.direct',
+  // Dev / tunnel / Expo tooling
+  'exp.direct', 'exp.host', 'expo.dev',
 ]);
 
 // Substrings that mark any root domain as infrastructure noise.
 const IGNORED_SUBSTRINGS = [
   // Apple / Akamai
   'akadns', 'akamai', 'aaplimg', 'mzstatic', 'phobos', 'ocsp',
-  // Infra / security
-  'digicert', 'fastly', 'cloudflare', 'amazonaws',
+  // Infra / security / cloud
+  'digicert', 'fastly', 'cloudflare', 'cloudfront', 'amazonaws', 'azurewebsites',
   // Analytics / tracking / crash
   'sentry', 'mixpanel', 'braze', 'intercom', 'appsflyer',
   'amplitude', 'segment', 'analytics', 'telemetry', 'metrics', 'tracker',
   'firebase', 'datadog', 'googleapis', 'supabase',
   'doubleclick', 'doubleverify', 'crashlytics', 'bugsnag', 'newrelic', 'dynatrace',
+  'tagmanager', 'pendo', 'helloid', 'ampproject',
+  // LMS / education / SSO portals
+  'instructure', 'canvaslms', 'inscloudgate', 'insops',
+  // School district patterns
+  'k12',
   // CDN / delivery patterns
   'cdn', 'delivery', 'edge', 'static', 'assets', 'media',
-  // Dev tools
+  // Dev / tunnel tools
   'ngrok', 'exp.direct', 'localhost',
 ];
 
@@ -229,13 +241,17 @@ function formatMins(mins) {
 }
 
 // Returns true only if the SLD looks like a real brand name, not a CDN/hash identifier.
-// Filters: too short/long, >30% digits, 3+ consecutive digits, pure hex hash.
 function looksLikeBrand(sld) {
-  if (!sld || sld.length < 2 || sld.length > 24) return false;
+  if (!sld || sld.length < 2 || sld.length > 22) return false;
+  // Too many digits (>25% of chars)
   const digits = (sld.match(/\d/g) || []).length;
-  if (digits > Math.ceil(sld.length * 0.3)) return false;
+  if (digits > Math.ceil(sld.length * 0.25)) return false;
+  // Any run of 3+ consecutive digits
   if (/\d{3,}/.test(sld)) return false;
-  if (/^[0-9a-f]{8,}$/i.test(sld)) return false;
+  // Pure hex string of 6+ chars (e.g. cloudfront hash subdomains leaking through)
+  if (/^[0-9a-f]{6,}$/i.test(sld)) return false;
+  // Looks like a UUID or hash fragment (8+ alphanum, no vowels → likely a token)
+  if (sld.length >= 8 && !/[aeiou]/i.test(sld)) return false;
   return true;
 }
 
@@ -804,17 +820,25 @@ export default function HomeScreen() {
 
       async function loadRealData() {
         console.log('[HomeScreen] useFocusEffect fired — loading per-user data');
-        const [[, userId], [, partnerId]] = await AsyncStorage.multiGet(['userId', 'partnerId']);
+
+        // Step 1: read only the logged-in user's Supabase ID from AsyncStorage.
+        const userId = await AsyncStorage.getItem('userId');
         if (!userId) { console.log('[HomeScreen] no userId — using mock'); return; }
 
-        const avatarSelect = 'name, nextdns_profile_id, nextdns_api_key, hair_style, hair_color, skin_tone, eye_style, mouth_style, accessory';
-        const [{ data: myRow, error: myErr }, { data: partnerRow, error: partnerErr }] = await Promise.all([
-          supabase.from('users').select(avatarSelect).eq('id', userId).single(),
-          partnerId
-            ? supabase.from('users').select(avatarSelect).eq('id', partnerId).single()
-            : Promise.resolve({ data: null, error: null }),
-        ]);
+        // Step 2: fetch the logged-in user's own row, including partner_id.
+        const avatarSelect = 'name, partner_id, nextdns_profile_id, nextdns_api_key, hair_style, hair_color, skin_tone, eye_style, mouth_style, accessory';
+        const { data: myRow, error: myErr } = await supabase
+          .from('users')
+          .select(avatarSelect)
+          .eq('id', userId)
+          .single();
         if (myErr) console.log('[HomeScreen] my row error:', myErr.message);
+
+        // Step 3: use partner_id from the user's own Supabase row (not AsyncStorage).
+        const partnerId = myRow?.partner_id ?? null;
+        const { data: partnerRow, error: partnerErr } = partnerId
+          ? await supabase.from('users').select(avatarSelect).eq('id', partnerId).single()
+          : { data: null, error: null };
         if (partnerErr) console.log('[HomeScreen] partner row error:', partnerErr.message);
 
         credentialsRef.current = {
@@ -844,11 +868,18 @@ export default function HomeScreen() {
           accessory:  partnerRow.accessory   || AVATAR_DEFAULTS.accessory,
         } : null;
 
-        // Log each card's profile ID separately so we can verify they are different.
+        // Log each card's profile ID before fetching — if they are the same, the Supabase fetch is wrong.
         console.log('[HomeScreen] ME card     — NextDNS profileId:', myRow?.nextdns_profile_id ?? 'MISSING');
         console.log('[HomeScreen] PARTNER card — NextDNS profileId:', partnerRow?.nextdns_profile_id ?? 'MISSING');
+        if (
+          myRow?.nextdns_profile_id != null &&
+          myRow?.nextdns_profile_id === partnerRow?.nextdns_profile_id
+        ) {
+          console.log('[HomeScreen] WARNING: both profile IDs are identical — Supabase fetch is returning the same row for both users!');
+        }
 
-        // Fetch each profile's logs in completely separate API calls.
+        // Step 4: make two completely separate NextDNS API calls using each person's own credentials.
+        // Left card = logged-in user (me). Right card = partner.
         const myLogs      = await fetchNextDNSLogs(myRow?.nextdns_profile_id, myRow?.nextdns_api_key);
         const partnerLogs = await fetchNextDNSLogs(partnerRow?.nextdns_profile_id, partnerRow?.nextdns_api_key);
 
