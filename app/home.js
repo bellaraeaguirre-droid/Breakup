@@ -1,10 +1,10 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  StatusBar, Dimensions, Platform,
+  StatusBar, Dimensions, Platform, Modal, Animated, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
@@ -13,7 +13,10 @@ import Svg, {
 import AvatarCustom, { AVATAR_DEFAULTS } from '../components/AvatarCustom';
 
 const W = Dimensions.get('window').width;
-const CARD_W = Math.floor((W - 36) / 2);
+const H = Dimensions.get('window').height;
+const CARD_W  = Math.floor((W - 36) / 2);
+const SHEET_H = Math.round(H * 0.70);
+const SERIF   = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' });
 
 const P = {
   bg: '#F9F7FF',
@@ -171,68 +174,52 @@ const DOMAIN_MAP = {
   'coinbase.com':    { name: 'Coinbase',     d: 'finance' },
 };
 
-// Exact root domains that are infrastructure noise — never shown as apps.
-const IGNORED_ROOTS = new Set([
-  // Apple system infrastructure
-  'apple-dns.net', 'icloud.com', 'icloud-content.com', 'mzstatic.com', 'aaplimg.com',
-  'ocsp.apple.com', 'push.apple.com', 'courier.push.apple.com',
-  'guzzoni.apple.com', 'xp.apple.com', 'mask.icloud.com', 'appattest.apple.com',
-  // DNS / CDN / cloud infrastructure
-  'akadns.net', 'akamai.net', 'akamaiedge.net', 'akamaihd.net',
-  'cloudflare.net', 'cloudfront.net', 'fastly.net', 'amazonaws.com', 'digicert.com',
-  'googleapis.com', 'nextdns.io', 'windows.net',
-  // Analytics, tracking, crash-reporting SDKs
-  'mixpanel.com', 'braze.com', 'intercom.io', 'intercom.com',
-  'appsflyersdk.com', 'sentry.io', 'app-analytics-services.com',
-  'firebase.com', 'datadoghq.com', 'doubleverify.com', 'supabase.co',
-  'pendo.io', 'googletagmanager.com', 'ampproject.org',
-  // Identity / SSO providers
-  'inscloudgate.net', 'insops.net', 'helloid.cloud', 'helloid.com',
-  // LMS / education portals
-  'canvaslms.com', 'instructure.com',
-  // Screen-time monitor app (its own traffic)
-  'stayfreeapps.com',
-  // Snapchat CDN (not real usage)
-  'sc-gw.com', 'sc-cdn.net',
-  // Dev / tunnel / Expo tooling
-  'exp.direct', 'exp.host', 'expo.dev',
+// Exact domains that are always hidden.
+const BLOCKED_EXACT = new Set([
+  'googleusercontent.com', 'googleadservices.com', 'googlesyndication.com',
+  'revenuecat.com', 'onesignal.com', 'qualtrics.com', 'ntp.org',
+  'ampaeservices.com', 'doubleclick.net',
 ]);
 
-// Substrings that mark any root domain as infrastructure noise.
-const IGNORED_SUBSTRINGS = [
-  // Apple / Akamai
-  'akadns', 'akamai', 'aaplimg', 'mzstatic', 'phobos', 'ocsp',
-  // Infra / security / cloud
-  'digicert', 'fastly', 'cloudflare', 'cloudfront', 'amazonaws', 'azurewebsites',
-  // Analytics / tracking / crash
-  'sentry', 'mixpanel', 'braze', 'intercom', 'appsflyer',
-  'amplitude', 'segment', 'analytics', 'telemetry', 'metrics', 'tracker',
-  'firebase', 'datadog', 'googleapis', 'supabase',
-  'doubleclick', 'doubleverify', 'crashlytics', 'bugsnag', 'newrelic', 'dynatrace',
-  'tagmanager', 'pendo', 'helloid', 'ampproject',
-  // LMS / education / SSO portals
-  'instructure', 'canvaslms', 'inscloudgate', 'insops',
-  // School district patterns
-  'k12',
-  // CDN / delivery patterns
-  'cdn', 'delivery', 'edge', 'static', 'assets', 'media',
-  // Dev / tunnel tools
-  'ngrok', 'exp.direct', 'localhost',
+// Any subdomain (or the root itself) of these parents is hidden.
+const BLOCKED_PARENTS = ['lovable.app', 'googleapis.com', 'gstatic.com'];
+
+// Substrings that mark any domain as noise — checked against the full domain string.
+const BLOCKED_SUBSTRINGS = [
+  'cdn', 'analytics', 'tracker', 'telemetry', 'metrics',
+  'beacon', 'pixel', 'adservice', 'survey', 'notify', 'push',
+  // 'ads' checked separately below to avoid matching 'loads', 'reads', etc.
 ];
 
-// TikTok CDN domains that should be merged into tiktok.com instead of shown separately.
+// .app TLD is infrastructure/hosting by default; only these are real consumer apps.
+const ALLOWED_APP_DOMAINS = new Set([
+  'linear.app', 'notion.app', 'figma.app',
+]);
+
+// TikTok CDN domains that are merged into tiktok.com instead of shown separately.
 const TIKTOK_ALIASES = new Set(['tiktokcdn-us.com', 'tiktokv.us']);
 
-function isIgnoredDomain(root) {
-  if (!root) return true;
-  if (IGNORED_ROOTS.has(root)) return true;
-  const lower = root.toLowerCase();
-  return IGNORED_SUBSTRINGS.some(sub => lower.includes(sub));
-}
+function isBlockedDomain(domain, root) {
+  if (!domain && !root) return true;
+  const full = (domain || root).toLowerCase();
+  const r    = (root   || domain).toLowerCase();
 
-function getRootDomain(domain) {
-  const parts = (domain || '').split('.');
-  return parts.length >= 2 ? parts.slice(-2).join('.') : domain;
+  // Exact match — fastest check first.
+  if (BLOCKED_EXACT.has(full) || BLOCKED_EXACT.has(r)) return true;
+
+  // Subdomain of a blocked parent (e.g. *.googleapis.com, *.lovable.app).
+  if (BLOCKED_PARENTS.some(p => full === p || full.endsWith('.' + p))) return true;
+
+  // Substring noise patterns across the full domain.
+  if (BLOCKED_SUBSTRINGS.some(s => full.includes(s))) return true;
+
+  // 'ads' as a whole label only — avoids hitting 'loads', 'reads', 'uploads', etc.
+  if (full.split('.').includes('ads')) return true;
+
+  // .app TLD: block everything except known consumer apps.
+  if (r.endsWith('.app') && !ALLOWED_APP_DOMAINS.has(r)) return true;
+
+  return false;
 }
 
 function formatMins(mins) {
@@ -240,45 +227,33 @@ function formatMins(mins) {
   return `${mins}m`;
 }
 
-// Returns true only if the SLD looks like a real brand name, not a CDN/hash identifier.
-function looksLikeBrand(sld) {
-  if (!sld || sld.length < 2 || sld.length > 22) return false;
-  // Too many digits (>25% of chars)
-  const digits = (sld.match(/\d/g) || []).length;
-  if (digits > Math.ceil(sld.length * 0.25)) return false;
-  // Any run of 3+ consecutive digits
-  if (/\d{3,}/.test(sld)) return false;
-  // Pure hex string of 6+ chars (e.g. cloudfront hash subdomains leaking through)
-  if (/^[0-9a-f]{6,}$/i.test(sld)) return false;
-  // Looks like a UUID or hash fragment (8+ alphanum, no vowels → likely a token)
-  if (sld.length >= 8 && !/[aeiou]/i.test(sld)) return false;
-  return true;
-}
-
 // Build sorted app list from NextDNS log entries.
-// TikTok CDN aliases are merged into tiktok.com before filtering.
-// Unknown domains only appear if they pass the looksLikeBrand heuristic.
+// Logs every unique domain with SHOWN/HIDDEN so the filter can be verified in the console.
 function buildApps(entries) {
+  // Count occurrences per root, keeping a sample full domain for substring checks.
   const counts = {};
   for (const entry of entries) {
-    // Remap TikTok CDN domains to canonical tiktok.com before any filtering.
-    const root = TIKTOK_ALIASES.has(entry.root) ? 'tiktok.com' : entry.root;
-    if (isIgnoredDomain(root)) continue;
-    counts[root] = (counts[root] || 0) + 1;
+    const root   = TIKTOK_ALIASES.has(entry.root) ? 'tiktok.com' : entry.root;
+    const domain = entry.domain || root;
+    if (!counts[root]) counts[root] = { domain, n: 0 };
+    counts[root].n++;
   }
-  const apps = Object.entries(counts)
-    .map(([root, count]) => {
-      const mins = count * 2;
-      const mapped = DOMAIN_MAP[root];
-      if (mapped) return { name: mapped.name, d: mapped.d, dur: formatMins(mins), m: mins };
-      // Unknown domain: only show if the SLD looks like a real brand name.
-      const sld = root.split('.')[0];
-      if (!looksLikeBrand(sld)) return null;
-      return { name: root.replace(/^www\./, ''), d: 'globe', dur: formatMins(mins), m: mins };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.m - a.m);
-  console.log('[buildApps] entries:', entries.length, '| visible domains:', apps.length);
+
+  const apps = [];
+  for (const [root, { domain, n }] of Object.entries(counts)) {
+    const blocked = isBlockedDomain(domain, root);
+    console.log(`[filter] ${domain !== root ? domain + ' → ' : ''}${root} : ${blocked ? 'HIDDEN' : 'SHOWN'}`);
+    if (blocked) continue;
+    const mins   = n * 2;
+    const mapped = DOMAIN_MAP[root];
+    apps.push(mapped
+      ? { name: mapped.name, d: mapped.d, dur: formatMins(mins), m: mins }
+      : { name: root.replace(/^www\./, ''), d: 'globe', dur: formatMins(mins), m: mins },
+    );
+  }
+
+  apps.sort((a, b) => b.m - a.m);
+  console.log('[buildApps] entries:', entries.length, '| unique roots:', Object.keys(counts).length, '| visible:', apps.length);
   return apps;
 }
 
@@ -335,6 +310,24 @@ async function fetchNextDNSLogs(profileId, apiKey) {
 // Dynamic avatars rendered via AvatarCustom — see components/AvatarCustom.js
 
 // ─── ICONS ────────────────────────────────────────────────────────────────────
+
+const CrownIcon = ({ size = 22 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M2 19h20M3 19l2-9 4.5 5L12 5l2.5 10L19 10l2 9"
+      stroke="#FFB800" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+const SmallLockIcon = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Rect x="3" y="11" width="18" height="11" rx="2.5"
+      stroke={P.dark} strokeWidth="2" fill="none" />
+    <Path d="M7 11V7a5 5 0 0110 0v4"
+      stroke={P.dark} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
 
 const HeartIcon = ({ color = P.green, size = 13 }) => (
   <Svg width={size} height={size} viewBox="0 0 13 13" fill="none">
@@ -618,11 +611,33 @@ const WeekBars = ({ data, color, compact = true }) => {
 
 // ─── HOME CARD ────────────────────────────────────────────────────────────────
 
-const PersonCard = ({ person, onPress }) => {
+const FREE_VISIBLE = 3; // app rows shown unblurred for free users
+
+const AppRow = ({ app, maxM, color }) => (
+  <View style={s.appItem}>
+    <View style={s.appTop}>
+      <View style={s.appLeft}>
+        <AppIcon d={app.d} s={20} />
+        <Text style={s.appName} numberOfLines={1}>{app.name}</Text>
+      </View>
+      <Text style={[s.appDur, { color }]}>{app.dur}</Text>
+    </View>
+    <View style={s.barBg}>
+      <View style={[s.barFg, { width: `${(app.m / maxM) * 100}%`, backgroundColor: color }]} />
+    </View>
+  </View>
+);
+
+const PersonCard = ({ person, onPress, isPaid, onUpgrade }) => {
   const maxM = person.apps.length > 0 ? Math.max(...person.apps.map(a => a.m)) : 1;
   const nowMs = Date.now();
   const online = person.lastSeenAt != null && (nowMs - person.lastSeenAt) < 5 * 60 * 1000;
   const lastSeenMins = person.lastSeenAt != null ? Math.floor((nowMs - person.lastSeenAt) / 60000) : null;
+
+  const apps = person.apps.slice(0, 5);
+  const visibleApps = isPaid ? apps : apps.slice(0, FREE_VISIBLE);
+  const hiddenApps  = isPaid ? []   : apps.slice(FREE_VISIBLE);
+  const showBlur    = !isPaid && hiddenApps.length > 0;
 
   return (
     <TouchableOpacity style={[s.card, { width: CARD_W }]} onPress={onPress} activeOpacity={0.88}>
@@ -640,27 +655,46 @@ const PersonCard = ({ person, onPress }) => {
       <View style={s.barsWrap}>
         <WeekBars data={person.week} color={person.color} compact />
       </View>
-      {person.apps.slice(0, 5).map((app, i) => (
-        <View key={i} style={s.appItem}>
-          <View style={s.appTop}>
-            <View style={s.appLeft}>
-              <AppIcon d={app.d} s={20} />
-              <Text style={s.appName} numberOfLines={1}>{app.name}</Text>
+
+      {/* Always-visible items */}
+      {visibleApps.map((app, i) => (
+        <AppRow key={i} app={app} maxM={maxM} color={person.color} />
+      ))}
+
+      {/* Frosted blur section for free users */}
+      {showBlur && (
+        <View style={s.blurWrap}>
+          {/* Faded items rendered behind the overlay */}
+          {hiddenApps.map((app, i) => (
+            <View key={i} style={{ opacity: 0.12 }}>
+              <AppRow app={app} maxM={maxM} color={person.color} />
             </View>
-            <Text style={[s.appDur, { color: person.color }]}>{app.dur}</Text>
+          ))}
+
+          {/* Gradient overlay — transparent → opaque white */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0)' }} />
+            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.62)' }} />
+            <View style={{ flex: 2, backgroundColor: 'rgba(255,255,255,0.94)' }} />
           </View>
-          <View style={s.barBg}>
-            <View style={[s.barFg, { width: `${(app.m / maxM) * 100}%`, backgroundColor: person.color }]} />
+
+          {/* Lock UI pinned to bottom of the blur zone */}
+          <View style={s.lockUI}>
+            <SmallLockIcon />
+            <Text style={s.lockTxt}>Upgrade to see full history</Text>
+            <TouchableOpacity style={s.lockBtn} onPress={onUpgrade} activeOpacity={0.85}>
+              <Text style={s.lockBtnTxt}>Upgrade</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      ))}
+      )}
     </TouchableOpacity>
   );
 };
 
 // ─── HOME VIEW ────────────────────────────────────────────────────────────────
 
-const HomeView = ({ onSelect, onSettings, people }) => (
+const HomeView = ({ onSelect, onSettings, onUpgrade, people, isPaid }) => (
   <SafeAreaView style={s.root}>
     <StatusBar barStyle="dark-content" backgroundColor={P.bg} />
     <ScrollView contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
@@ -669,18 +703,170 @@ const HomeView = ({ onSelect, onSettings, people }) => (
         <View style={s.sharedBadge}>
           <Text style={s.sharedBadgeTxt}>🔥 12 day shared streak</Text>
         </View>
+        <TouchableOpacity style={s.crownBtn} onPress={onUpgrade} activeOpacity={0.7}>
+          <CrownIcon size={22} />
+        </TouchableOpacity>
         <TouchableOpacity style={s.gearBtn} onPress={onSettings} activeOpacity={0.7}>
           <GearIcon size={24} />
         </TouchableOpacity>
       </View>
       <View style={s.cardsRow}>
         {people.map(p => (
-          <PersonCard key={p.id} person={p} onPress={() => onSelect(p)} />
+          <PersonCard key={p.id} person={p} onPress={() => onSelect(p)} isPaid={isPaid} onUpgrade={onUpgrade} />
         ))}
       </View>
     </ScrollView>
   </SafeAreaView>
 );
+
+// ─── PAYWALL MODAL ────────────────────────────────────────────────────────────
+
+const PAYWALL_FEATURES = [
+  { icon: '🔍', title: 'Full browsing history',     sub: 'including every site visited' },
+  { icon: '🌙', title: 'Late night alerts',          sub: "when they're secretly scrolling" },
+  { icon: '🕵️', title: 'Private browsing history',  sub: 'yes even incognito' },
+];
+
+const PaywallModal = ({ visible, onDismiss }) => {
+  const slideY    = useRef(new Animated.Value(SHEET_H)).current;
+  const bgOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    slideY.setValue(SHEET_H);
+    bgOpacity.setValue(0);
+    Animated.parallel([
+      Animated.spring(slideY,    { toValue: 0, useNativeDriver: true, friction: 9, tension: 65 }),
+      Animated.timing(bgOpacity, { toValue: 1, duration: 320, useNativeDriver: true }),
+    ]).start();
+  }, [visible]);
+
+  function dismiss() {
+    Animated.parallel([
+      Animated.timing(slideY,    { toValue: SHEET_H, duration: 260, useNativeDriver: true }),
+      Animated.timing(bgOpacity, { toValue: 0,       duration: 200, useNativeDriver: true }),
+    ]).start(() => onDismiss());
+  }
+
+  function handleSubscribe() {
+    Alert.alert('Coming Soon', 'Subscriptions are coming soon! 🎉');
+  }
+
+  if (!visible) return null;
+
+  return (
+    <Modal transparent visible animationType="none" onRequestClose={dismiss} statusBarTranslucent>
+      <View style={pw.root}>
+        {/* Dark backdrop — pointer-transparent so touches fall through to the dismiss zone */}
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.60)', opacity: bgOpacity }]}
+        />
+        {/* Tapping above the sheet dismisses it */}
+        <TouchableOpacity style={{ flex: 1 }} onPress={dismiss} activeOpacity={1} />
+        {/* Sheet */}
+        <Animated.View style={[pw.sheet, { transform: [{ translateY: slideY }] }]}>
+          <View style={pw.pullTab} />
+          <TouchableOpacity
+            style={pw.closeBtn}
+            onPress={dismiss}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+          >
+            <Text style={pw.closeTxt}>✕</Text>
+          </TouchableOpacity>
+          <ScrollView
+            contentContainerStyle={pw.content}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <Text style={pw.headline}>You're missing{'\n'}the good stuff 👀</Text>
+            <Text style={pw.subhead}>Your partner has 14 websites{'\n'}you can't see yet.</Text>
+            {PAYWALL_FEATURES.map(({ icon, title, sub }) => (
+              <View key={title} style={pw.featureRow}>
+                <View style={pw.featureIcon}>
+                  <Text style={{ fontSize: 20 }}>{icon}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={pw.featureTitle}>{title}</Text>
+                  <Text style={pw.featureSub}>{sub}</Text>
+                </View>
+              </View>
+            ))}
+            <Text style={pw.social}>Join 2,400 couples who hide nothing</Text>
+            <TouchableOpacity style={pw.cta} onPress={handleSubscribe} activeOpacity={0.85}>
+              <Text style={pw.ctaTxt}>See Everything — $3.99/month</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleSubscribe} activeOpacity={0.7} style={pw.trialBtn}>
+              <Text style={pw.trialTxt}>Start 7-day free trial</Text>
+            </TouchableOpacity>
+            <Text style={pw.disclaimer}>Cancel anytime, no questions asked</Text>
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
+const pw = StyleSheet.create({
+  root: { flex: 1, justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    height: SHEET_H,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: 'hidden',
+  },
+  pullTab: {
+    width: 36, height: 4,
+    backgroundColor: '#E5E5EA',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  closeBtn: {
+    position: 'absolute', top: 14, right: 16, zIndex: 10,
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#E5E5EA',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  closeTxt: { fontSize: 12, color: '#8E8E93', fontWeight: '700' },
+  content: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 28 },
+  headline: {
+    fontSize: 28, fontWeight: '900', fontStyle: 'italic',
+    color: P.red, fontFamily: SERIF,
+    lineHeight: 34, marginBottom: 10,
+  },
+  subhead: {
+    fontSize: 14, color: P.mid, fontWeight: '500',
+    lineHeight: 21, marginBottom: 24,
+  },
+  featureRow: {
+    flexDirection: 'row', alignItems: 'center',
+    marginBottom: 14, gap: 14,
+  },
+  featureIcon: {
+    width: 44, height: 44, borderRadius: 13,
+    backgroundColor: P.redPale,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  featureTitle: { fontSize: 14, fontWeight: '700', color: P.dark, marginBottom: 2 },
+  featureSub:   { fontSize: 12, color: P.mid },
+  social: {
+    textAlign: 'center', fontSize: 13, color: P.mid,
+    fontWeight: '600', marginTop: 8, marginBottom: 20,
+  },
+  cta: {
+    backgroundColor: P.red, borderRadius: 999,
+    paddingVertical: 16, alignItems: 'center',
+    shadowColor: P.red, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.32, shadowRadius: 10, elevation: 5,
+  },
+  ctaTxt:    { color: '#FFFFFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
+  trialBtn:  { marginTop: 14, alignItems: 'center' },
+  trialTxt:  { fontSize: 14, color: P.red, fontWeight: '600', textDecorationLine: 'underline' },
+  disclaimer:{ textAlign: 'center', fontSize: 11, color: P.mid, marginTop: 14 },
+});
 
 // ─── DETAIL SCREEN ────────────────────────────────────────────────────────────
 
@@ -784,9 +970,38 @@ const DetailScreen = ({ person, onBack }) => {
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [selected, setSelected] = useState(null);
-  const [people, setPeople] = useState(PEOPLE);
+  const [selected, setSelected]       = useState(null);
+  const [people, setPeople]           = useState(PEOPLE);
+  const [isPaid, setIsPaid]           = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   const credentialsRef = useRef({ my: null, partner: null });
+
+  // Show paywall 30 s after mount, at most once per 24 h, never during onboarding.
+  useEffect(() => {
+    let timer;
+    (async () => {
+      try {
+        const userId = await AsyncStorage.getItem('userId');
+        if (!userId) return;                                    // not yet logged in
+        const last = await AsyncStorage.getItem('paywallLastShown');
+        if (last && Date.now() - Number(last) < 24 * 60 * 60 * 1000) return;
+        timer = setTimeout(() => setShowPaywall(true), 30_000);
+      } catch {}
+    })();
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Read subscription tier from AsyncStorage — no Supabase call.
+  useEffect(() => {
+    AsyncStorage.getItem('subscriptionTier')
+      .then(tier => setIsPaid(!!tier && tier !== 'free'))
+      .catch(() => {});
+  }, []);
+
+  async function handleDismissPaywall() {
+    setShowPaywall(false);
+    try { await AsyncStorage.setItem('paywallLastShown', String(Date.now())); } catch {}
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -904,19 +1119,29 @@ export default function HomeScreen() {
   );
 
   if (selected) return <DetailScreen person={selected} onBack={() => setSelected(null)} />;
-  return <HomeView onSelect={setSelected} onSettings={() => router.push('/settings')} people={people} />;
+  return (
+    <>
+      <HomeView
+        onSelect={setSelected}
+        onSettings={() => router.push('/settings')}
+        onUpgrade={() => router.push('/upgrade')}
+        people={people}
+        isPaid={isPaid}
+      />
+      <PaywallModal visible={showPaywall} onDismiss={handleDismissPaywall} />
+    </>
+  );
 }
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
-
-const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' });
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: P.bg },
   scrollPad: { paddingBottom: 40 },
 
   header: { alignItems: 'center', paddingTop: 10, paddingBottom: 18, paddingHorizontal: 20, position: 'relative' },
-  gearBtn: { position: 'absolute', top: 12, right: 18, padding: 6 },
+  crownBtn: { position: 'absolute', top: 12, right: 56, padding: 6 },
+  gearBtn:  { position: 'absolute', top: 12, right: 18, padding: 6 },
   logo: { fontSize: 46, fontWeight: '900', fontStyle: 'italic', color: P.red, fontFamily: SERIF },
   tagline: { fontSize: 14, color: P.mid, marginTop: 2 },
   sharedBadge: {
@@ -977,6 +1202,28 @@ const s = StyleSheet.create({
   appDur: { fontSize: 10, fontWeight: '700' },
   barBg: { height: 3, backgroundColor: '#EEECF8', borderRadius: 2, overflow: 'hidden' },
   barFg: { height: '100%', borderRadius: 2 },
+
+  // Blur / paywall overlay on card feed
+  blurWrap: {
+    overflow: 'hidden',
+    minHeight: 92,
+  },
+  lockUI: {
+    position: 'absolute',
+    bottom: 6, left: 0, right: 0,
+    alignItems: 'center',
+  },
+  lockTxt: {
+    fontSize: 10.5, fontWeight: '600', color: P.dark,
+    marginTop: 5, marginBottom: 7, textAlign: 'center',
+  },
+  lockBtn: {
+    backgroundColor: P.red, borderRadius: 999,
+    paddingVertical: 5, paddingHorizontal: 14,
+    shadowColor: P.red, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.28, shadowRadius: 6, elevation: 3,
+  },
+  lockBtnTxt: { color: '#FFF', fontSize: 11, fontWeight: '700' },
 
   back: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   backTxt: { fontSize: 17, fontWeight: '600' },

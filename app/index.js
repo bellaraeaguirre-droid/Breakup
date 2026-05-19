@@ -13,7 +13,7 @@ export default function WelcomeScreen() {
   useEffect(() => {
     AsyncStorage.multiGet(['userId', 'partnerId']).then(([[, userId], [, partnerId]]) => {
       if (userId && partnerId) {
-        router.replace('/home');
+        router.replace('/(tabs)/home');
       } else if (userId) {
         router.replace('/pairing');
       }
