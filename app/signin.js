@@ -14,62 +14,59 @@ const P = {
   mid: '#8E8E93', dark: '#1C1C1E', white: '#FFFFFF', border: '#E0DFF0',
 };
 
-function generateCoupleCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
-export default function SignupScreen() {
+export default function SigninScreen() {
   const router = useRouter();
   const passwordRef = useRef(null);
-  const confirmRef  = useRef(null);
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [confirm,  setConfirm]  = useState('');
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
 
-  const canSubmit = email.trim().length > 0 && password.length >= 6 && confirm.length >= 6;
+  const canSubmit = email.trim().length > 0 && password.length > 0;
 
-  const handleSignUp = async () => {
+  const handleSignIn = async () => {
     setError('');
-    if (password !== confirm) {
-      setError('Passwords do not match.');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
     setLoading(true);
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
-      if (signUpError) {
-        setError(signUpError.message);
+      if (signInError) {
+        setError(signInError.message);
         return;
       }
       const userId = data.user?.id;
       if (!userId) {
-        setError('Signup failed — no user ID was returned. Please try again.');
+        setError('Sign in succeeded but no user ID was returned. Please try again.');
         return;
       }
 
-      // Immediately create the user row and couple code in Supabase.
-      const coupleCode = generateCoupleCode();
-      const { error: upsertError } = await supabase
+      await AsyncStorage.setItem('userId', userId);
+
+      // Fetch the user's row to decide where to resume in onboarding.
+      const { data: userRow } = await supabase
         .from('users')
-        .upsert({ id: userId, couple_code: coupleCode }, { onConflict: 'id' });
-      if (upsertError) console.log('[signup] upsert error:', upsertError.message);
+        .select('onboarding_complete, partner_id, couple_code, name')
+        .eq('id', userId)
+        .single();
 
-      await AsyncStorage.multiSet([
-        ['userId',     userId],
-        ['coupleCode', coupleCode],
-      ]);
+      if (userRow?.couple_code) await AsyncStorage.setItem('coupleCode', userRow.couple_code);
+      if (userRow?.name)        await AsyncStorage.setItem('userName',   userRow.name);
 
-      router.push('/name');
+      if (userRow?.onboarding_complete) {
+        router.replace('/(tabs)/home');
+      } else if (userRow?.partner_id) {
+        // Has partner but not fully done — resume at tutorial
+        router.replace('/tutorial');
+      } else if (userRow?.name) {
+        // Has name → got past name screen; resume at pairing
+        router.replace('/pairing');
+      } else {
+        // No name yet → start from name screen
+        router.replace('/name');
+      }
     } catch (err) {
       setError(err?.message || 'Something went wrong. Please try again.');
     } finally {
@@ -88,8 +85,8 @@ export default function SignupScreen() {
         </View>
 
         <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Text style={s.heading}>Create your account</Text>
-          <Text style={s.sub}>Your partner will see your name and activity — nothing else.</Text>
+          <Text style={s.heading}>Welcome back</Text>
+          <Text style={s.sub}>Sign in to see what your partner is up to.</Text>
 
           <Text style={s.label}>Email</Text>
           <TextInput
@@ -110,29 +107,14 @@ export default function SignupScreen() {
           <TextInput
             ref={passwordRef}
             style={s.input}
-            placeholder="At least 6 characters"
+            placeholder="Your password"
             placeholderTextColor={P.mid}
             value={password}
             onChangeText={v => { setPassword(v); setError(''); }}
             secureTextEntry
             autoCapitalize="none"
-            returnKeyType="next"
-            onSubmitEditing={() => confirmRef.current?.focus()}
-            editable={!loading}
-          />
-
-          <Text style={s.label}>Confirm Password</Text>
-          <TextInput
-            ref={confirmRef}
-            style={s.input}
-            placeholder="Same password again"
-            placeholderTextColor={P.mid}
-            value={confirm}
-            onChangeText={v => { setConfirm(v); setError(''); }}
-            secureTextEntry
-            autoCapitalize="none"
             returnKeyType="done"
-            onSubmitEditing={handleSignUp}
+            onSubmitEditing={handleSignIn}
             editable={!loading}
           />
 
@@ -140,20 +122,20 @@ export default function SignupScreen() {
 
           <TouchableOpacity
             style={[s.btn, (!canSubmit || loading) && s.btnDisabled]}
-            onPress={handleSignUp}
+            onPress={handleSignIn}
             activeOpacity={0.85}
             disabled={!canSubmit || loading}
           >
             {loading
               ? <ActivityIndicator color={P.white} />
-              : <Text style={s.btnTxt}>Sign Up</Text>
+              : <Text style={s.btnTxt}>Sign In</Text>
             }
           </TouchableOpacity>
 
           <View style={s.switchRow}>
-            <Text style={s.switchTxt}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => router.replace('/signin')} activeOpacity={0.7}>
-              <Text style={s.switchLink}>Sign in</Text>
+            <Text style={s.switchTxt}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => router.replace('/signup')} activeOpacity={0.7}>
+              <Text style={s.switchLink}>Sign up</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

@@ -9,11 +9,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../lib/supabase';
 
-const P = {
-  bg: '#F9F7FF', red: '#E85D75', mid: '#8E8E93',
-  white: '#FFFFFF', dark: '#1C1C1E', redPale: '#FFF0F3',
-};
 const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' });
+const P = { bg: '#F9F7FF', red: '#E85D75', redPale: '#FFF0F3', mid: '#8E8E93', dark: '#1C1C1E', white: '#FFFFFF', border: '#E0DFF0' };
 
 export default function PairingScreen() {
   const router = useRouter();
@@ -34,35 +31,28 @@ export default function PairingScreen() {
     if (!myCode) return;
     await Clipboard.setStringAsync(myCode);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2200);
   };
 
   const handleConnect = async () => {
-    if (partnerCode.length !== 6) {
-      Alert.alert('Enter your partner\'s 6-digit code to connect.');
-      return;
-    }
+    if (partnerCode.length !== 6) return;
     if (partnerCode === myCode) {
-      Alert.alert('That\'s your own code!', 'Ask your partner for their code.');
+      Alert.alert("That's your own code!", 'Ask your partner for their code.');
       return;
     }
-
     setLoading(true);
-
-    // Find partner by couple_code
-    const { data: partner, error: findError } = await supabase
+    const { data: partner, error } = await supabase
       .from('users')
       .select('id')
       .eq('couple_code', partnerCode)
       .single();
 
-    if (findError || !partner) {
+    if (error || !partner) {
       setLoading(false);
       Alert.alert('Code not found', 'No account matches that code. Double-check with your partner.');
       return;
     }
 
-    // Set partner_id on both users simultaneously
     const [{ error: e1 }, { error: e2 }] = await Promise.all([
       supabase.from('users').update({ partner_id: partner.id }).eq('id', userId),
       supabase.from('users').update({ partner_id: userId }).eq('id', partner.id),
@@ -74,26 +64,40 @@ export default function PairingScreen() {
       return;
     }
 
-    await AsyncStorage.setItem('partnerId', partner.id);
-    router.replace('/home');
+    router.replace('/tutorial');
   };
 
   return (
     <SafeAreaView style={s.root}>
-      <View style={s.content}>
-        <Text style={s.logo}>breakup.</Text>
-        <Text style={s.heading}>Connect with your partner</Text>
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.headerLeft} activeOpacity={0.7}>
+          <Text style={s.backArrow}>←</Text>
+          <Text style={s.headerLogo}>breakup.</Text>
+        </TouchableOpacity>
+      </View>
 
-        <View style={s.codeCard}>
-          <Text style={s.codeLabel}>YOUR CODE</Text>
-          <Text style={s.codeText}>{myCode || '------'}</Text>
-          <TouchableOpacity style={s.copyBtn} onPress={handleCopy} activeOpacity={0.8}>
-            <Text style={s.copyBtnTxt}>{copied ? 'Copied!' : 'Copy code'}</Text>
-          </TouchableOpacity>
+      <View style={s.content}>
+        <Text style={s.heading}>Pair with your partner</Text>
+
+        {/* Your code */}
+        <View style={s.codeBox}>
+          <Text style={s.codeLabel}>YOUR COUPLE CODE</Text>
+          <View style={s.codeRow}>
+            <Text style={s.codeText}>{myCode || '------'}</Text>
+            <TouchableOpacity style={s.copyBtn} onPress={handleCopy} activeOpacity={0.8}>
+              <Text style={s.copyTxt}>{copied ? 'Copied!' : 'Copy'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <Text style={s.orText}>Enter your partner's code below</Text>
+        {/* Divider */}
+        <View style={s.divider}>
+          <View style={s.dividerLine} />
+          <Text style={s.dividerText}>or enter theirs</Text>
+          <View style={s.dividerLine} />
+        </View>
 
+        {/* Partner code input */}
         <TextInput
           style={s.codeInput}
           placeholder="000000"
@@ -119,6 +123,14 @@ export default function PairingScreen() {
             : <Text style={s.btnTxt}>Connect</Text>
           }
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={s.skipBtn}
+          onPress={() => router.replace('/tutorial')}
+          activeOpacity={0.7}
+        >
+          <Text style={s.skipTxt}>Skip for now</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -126,99 +138,80 @@ export default function PairingScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: P.bg },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    paddingTop: 52,
-    paddingHorizontal: 28,
-  },
-  logo: {
-    fontSize: 42,
-    fontWeight: '900',
-    fontStyle: 'italic',
-    color: P.red,
-    fontFamily: SERIF,
-    marginBottom: 32,
-  },
-  heading: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: P.dark,
-    marginBottom: 28,
-    textAlign: 'center',
-  },
-  codeCard: {
+
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  backArrow: { fontSize: 22, color: P.dark, lineHeight: 26 },
+  headerLogo: { fontSize: 22, fontStyle: 'italic', color: P.red, fontFamily: SERIF },
+
+  content: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
+  heading: { fontSize: 26, fontWeight: '800', color: P.dark, marginBottom: 28 },
+
+  codeBox: {
     backgroundColor: P.white,
-    borderRadius: 24,
-    paddingVertical: 28,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    width: '100%',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: P.red,
+    borderStyle: 'dashed',
+    paddingVertical: 24,
+    paddingHorizontal: 22,
+    marginBottom: 28,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    elevation: 4,
-    marginBottom: 24,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  codeLabel: {
-    fontSize: 11,
-    color: P.mid,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    marginBottom: 10,
-  },
-  codeText: {
-    fontSize: 52,
-    fontWeight: '900',
-    color: P.dark,
-    fontFamily: SERIF,
-    letterSpacing: 8,
-    marginBottom: 18,
-  },
+  codeLabel: { fontSize: 11, fontWeight: '700', color: P.mid, letterSpacing: 1.5, marginBottom: 12 },
+  codeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  codeText: { fontSize: 44, fontWeight: '900', color: P.dark, fontFamily: SERIF, letterSpacing: 6 },
   copyBtn: {
     backgroundColor: P.redPale,
     borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 28,
+    paddingVertical: 9,
+    paddingHorizontal: 20,
   },
-  copyBtnTxt: { color: P.red, fontWeight: '700', fontSize: 14 },
-  orText: {
-    fontSize: 14,
-    color: P.mid,
-    marginBottom: 14,
-    textAlign: 'center',
-  },
+  copyTxt: { color: P.red, fontWeight: '700', fontSize: 14 },
+
+  divider: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: P.border },
+  dividerText: { fontSize: 14, color: P.mid, fontWeight: '500' },
+
   codeInput: {
     backgroundColor: P.white,
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    fontSize: 30,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    fontSize: 34,
     fontWeight: '800',
-    letterSpacing: 6,
+    letterSpacing: 8,
     color: P.dark,
+    borderWidth: 1.5,
+    borderColor: P.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
     elevation: 2,
-    width: '100%',
     marginBottom: 20,
     textAlign: 'center',
   },
+
   btn: {
     backgroundColor: P.red,
-    borderRadius: 999,
+    borderRadius: 18,
     paddingVertical: 18,
     alignItems: 'center',
-    width: '100%',
     shadowColor: P.red,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.28,
     shadowRadius: 12,
     elevation: 6,
+    marginBottom: 16,
   },
-  btnDisabled: { opacity: 0.5 },
+  btnDisabled: { opacity: 0.45 },
   btnTxt: { color: '#FFFFFF', fontSize: 17, fontWeight: '700' },
+
+  skipBtn: { alignItems: 'center', paddingVertical: 8 },
+  skipTxt: { fontSize: 15, color: P.mid },
 });

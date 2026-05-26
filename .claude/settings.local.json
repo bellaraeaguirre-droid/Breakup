@@ -8,7 +8,8 @@
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\bella\\\\breakup\" | Where-Object { -not $_.PSIsContainer } | Select-Object Name)",
       "Bash(Get-ChildItem \"C:\\\\Users\\\\bella\\\\breakup\\\\app\")",
       "Bash(Select-Object Name, Length)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(Test-Path \"C:\\\\Users\\\\bella\\\\breakup\\\\app\\\\signup.js\")"
     ]
   }
 }

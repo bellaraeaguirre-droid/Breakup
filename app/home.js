@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { buildApps, getLastSeenAt, calcScreenTimeToday, formatMins } from '../lib/domainFilter';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   StatusBar, Dimensions, Platform, Modal, Animated, Alert,
@@ -79,212 +80,6 @@ const PEOPLE = [
   },
 ];
 
-// ─── NEXTDNS DATA PROCESSING ─────────────────────────────────────────────────
-
-const DOMAIN_MAP = {
-  // Social
-  'instagram.com':   { name: 'Instagram',    d: 'instagram' },
-  'tiktok.com':      { name: 'TikTok',       d: 'tiktok' },
-  'twitter.com':     { name: 'Twitter',      d: 'twitter' },
-  'x.com':           { name: 'Twitter',      d: 'twitter' },
-  'snapchat.com':    { name: 'Snapchat',     d: 'snapchat' },
-  'pinterest.com':   { name: 'Pinterest',    d: 'social' },
-  'tumblr.com':      { name: 'Tumblr',       d: 'social' },
-  'reddit.com':      { name: 'Reddit',       d: 'reddit' },
-  'facebook.com':    { name: 'Facebook',     d: 'social' },
-  'linkedin.com':    { name: 'LinkedIn',     d: 'social' },
-  'bereal.com':      { name: 'BeReal',       d: 'social' },
-  // Video
-  'youtube.com':     { name: 'YouTube',      d: 'youtube' },
-  'netflix.com':     { name: 'Netflix',      d: 'video' },
-  'hulu.com':        { name: 'Hulu',         d: 'video' },
-  'disneyplus.com':  { name: 'Disney+',      d: 'video' },
-  'twitch.tv':       { name: 'Twitch',       d: 'video' },
-  'vimeo.com':       { name: 'Vimeo',        d: 'video' },
-  'peacocktv.com':   { name: 'Peacock',      d: 'video' },
-  'paramountplus.com': { name: 'Paramount+', d: 'video' },
-  'hbomax.com':      { name: 'Max',          d: 'video' },
-  'max.com':         { name: 'Max',          d: 'video' },
-  'primevideo.com':  { name: 'Prime Video',  d: 'video' },
-  'crunchyroll.com': { name: 'Crunchyroll',  d: 'video' },
-  // Music
-  'spotify.com':     { name: 'Spotify',      d: 'spotify' },
-  'soundcloud.com':  { name: 'SoundCloud',   d: 'music' },
-  'pandora.com':     { name: 'Pandora',      d: 'music' },
-  'tidal.com':       { name: 'Tidal',        d: 'music' },
-  'deezer.com':      { name: 'Deezer',       d: 'music' },
-  'apple.com':       { name: 'Apple Music',  d: 'music' },
-  // Gaming
-  'discord.com':     { name: 'Discord',      d: 'discord' },
-  'steam.com':       { name: 'Steam',        d: 'gaming' },
-  'epicgames.com':   { name: 'Epic Games',   d: 'gaming' },
-  'roblox.com':      { name: 'Roblox',       d: 'gaming' },
-  'minecraft.net':   { name: 'Minecraft',    d: 'gaming' },
-  'xbox.com':        { name: 'Xbox',         d: 'gaming' },
-  'playstation.com': { name: 'PlayStation',  d: 'gaming' },
-  // Shopping
-  'amazon.com':      { name: 'Amazon',       d: 'shopping' },
-  'ebay.com':        { name: 'eBay',         d: 'shopping' },
-  'etsy.com':        { name: 'Etsy',         d: 'shopping' },
-  'shein.com':       { name: 'SHEIN',        d: 'shopping' },
-  'target.com':      { name: 'Target',       d: 'shopping' },
-  'walmart.com':     { name: 'Walmart',      d: 'shopping' },
-  'bestbuy.com':     { name: 'Best Buy',     d: 'shopping' },
-  'nike.com':        { name: 'Nike',         d: 'shopping' },
-  'fashionnova.com': { name: 'Fashion Nova', d: 'shopping' },
-  // Food
-  'doordash.com':    { name: 'DoorDash',     d: 'food' },
-  'ubereats.com':    { name: 'Uber Eats',    d: 'food' },
-  'grubhub.com':     { name: 'Grubhub',      d: 'food' },
-  'chipotle.com':    { name: 'Chipotle',     d: 'food' },
-  // Dating
-  'tinder.com':      { name: 'Tinder',       d: 'dating' },
-  'bumble.com':      { name: 'Bumble',       d: 'dating' },
-  'hinge.co':        { name: 'Hinge',        d: 'dating' },
-  'match.com':       { name: 'Match',        d: 'dating' },
-  // News
-  'nytimes.com':     { name: 'NY Times',     d: 'news' },
-  'cnn.com':         { name: 'CNN',          d: 'news' },
-  'bbc.com':         { name: 'BBC',          d: 'news' },
-  'foxnews.com':     { name: 'Fox News',     d: 'news' },
-  'buzzfeed.com':    { name: 'BuzzFeed',     d: 'news' },
-  // Sports
-  'espn.com':        { name: 'ESPN',         d: 'sports' },
-  'nba.com':         { name: 'NBA',          d: 'sports' },
-  'nfl.com':         { name: 'NFL',          d: 'sports' },
-  'mlb.com':         { name: 'MLB',          d: 'sports' },
-  // Tech
-  'github.com':      { name: 'GitHub',       d: 'github' },
-  'stackoverflow.com': { name: 'Stack Overflow', d: 'tech' },
-  'google.com':      { name: 'Google',       d: 'tech' },
-  'gmail.com':       { name: 'Gmail',        d: 'email' },
-  'outlook.com':     { name: 'Outlook',      d: 'email' },
-  'yahoo.com':       { name: 'Yahoo',        d: 'tech' },
-  // Travel
-  'airbnb.com':      { name: 'Airbnb',       d: 'travel' },
-  'expedia.com':     { name: 'Expedia',      d: 'travel' },
-  'booking.com':     { name: 'Booking',      d: 'travel' },
-  'uber.com':        { name: 'Uber',         d: 'travel' },
-  'lyft.com':        { name: 'Lyft',         d: 'travel' },
-  // Finance
-  'paypal.com':      { name: 'PayPal',       d: 'finance' },
-  'venmo.com':       { name: 'Venmo',        d: 'finance' },
-  'cashapp.com':     { name: 'Cash App',     d: 'finance' },
-  'robinhood.com':   { name: 'Robinhood',    d: 'finance' },
-  'coinbase.com':    { name: 'Coinbase',     d: 'finance' },
-};
-
-// Exact domains that are always hidden.
-const BLOCKED_EXACT = new Set([
-  'googleusercontent.com', 'googleadservices.com', 'googlesyndication.com',
-  'revenuecat.com', 'onesignal.com', 'qualtrics.com', 'ntp.org',
-  'ampaeservices.com', 'doubleclick.net',
-]);
-
-// Any subdomain (or the root itself) of these parents is hidden.
-const BLOCKED_PARENTS = ['lovable.app', 'googleapis.com', 'gstatic.com'];
-
-// Substrings that mark any domain as noise — checked against the full domain string.
-const BLOCKED_SUBSTRINGS = [
-  'cdn', 'analytics', 'tracker', 'telemetry', 'metrics',
-  'beacon', 'pixel', 'adservice', 'survey', 'notify', 'push',
-  // 'ads' checked separately below to avoid matching 'loads', 'reads', etc.
-];
-
-// .app TLD is infrastructure/hosting by default; only these are real consumer apps.
-const ALLOWED_APP_DOMAINS = new Set([
-  'linear.app', 'notion.app', 'figma.app',
-]);
-
-// TikTok CDN domains that are merged into tiktok.com instead of shown separately.
-const TIKTOK_ALIASES = new Set(['tiktokcdn-us.com', 'tiktokv.us']);
-
-function isBlockedDomain(domain, root) {
-  if (!domain && !root) return true;
-  const full = (domain || root).toLowerCase();
-  const r    = (root   || domain).toLowerCase();
-
-  // Exact match — fastest check first.
-  if (BLOCKED_EXACT.has(full) || BLOCKED_EXACT.has(r)) return true;
-
-  // Subdomain of a blocked parent (e.g. *.googleapis.com, *.lovable.app).
-  if (BLOCKED_PARENTS.some(p => full === p || full.endsWith('.' + p))) return true;
-
-  // Substring noise patterns across the full domain.
-  if (BLOCKED_SUBSTRINGS.some(s => full.includes(s))) return true;
-
-  // 'ads' as a whole label only — avoids hitting 'loads', 'reads', 'uploads', etc.
-  if (full.split('.').includes('ads')) return true;
-
-  // .app TLD: block everything except known consumer apps.
-  if (r.endsWith('.app') && !ALLOWED_APP_DOMAINS.has(r)) return true;
-
-  return false;
-}
-
-function formatMins(mins) {
-  if (mins >= 60) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-  return `${mins}m`;
-}
-
-// Build sorted app list from NextDNS log entries.
-// Logs every unique domain with SHOWN/HIDDEN so the filter can be verified in the console.
-function buildApps(entries) {
-  // Count occurrences per root, keeping a sample full domain for substring checks.
-  const counts = {};
-  for (const entry of entries) {
-    const root   = TIKTOK_ALIASES.has(entry.root) ? 'tiktok.com' : entry.root;
-    const domain = entry.domain || root;
-    if (!counts[root]) counts[root] = { domain, n: 0 };
-    counts[root].n++;
-  }
-
-  const apps = [];
-  for (const [root, { domain, n }] of Object.entries(counts)) {
-    const blocked = isBlockedDomain(domain, root);
-    console.log(`[filter] ${domain !== root ? domain + ' → ' : ''}${root} : ${blocked ? 'HIDDEN' : 'SHOWN'}`);
-    if (blocked) continue;
-    const mins   = n * 2;
-    const mapped = DOMAIN_MAP[root];
-    apps.push(mapped
-      ? { name: mapped.name, d: mapped.d, dur: formatMins(mins), m: mins }
-      : { name: root.replace(/^www\./, ''), d: 'globe', dur: formatMins(mins), m: mins },
-    );
-  }
-
-  apps.sort((a, b) => b.m - a.m);
-  console.log('[buildApps] entries:', entries.length, '| unique roots:', Object.keys(counts).length, '| visible:', apps.length);
-  return apps;
-}
-
-// Returns epoch-ms of the most recent log entry, or null if no valid timestamps.
-function getLastSeenAt(entries) {
-  if (!entries || entries.length === 0) return null;
-  let latest = 0;
-  for (const entry of entries) {
-    if (!entry.timestamp) continue;
-    const t = new Date(entry.timestamp).getTime();
-    if (t > latest) latest = t;
-  }
-  return latest > 0 ? latest : null;
-}
-
-// Active screen time: group today's entries into 5-min windows, count windows
-// with >= 2 entries as active, return total minutes.
-function calcScreenTimeToday(entries) {
-  if (!entries || entries.length === 0) return null;
-  const todayStartMs = new Date().setHours(0, 0, 0, 0);
-  const windows = {};
-  for (const entry of entries) {
-    if (!entry.timestamp) continue;
-    const t = new Date(entry.timestamp).getTime();
-    if (t < todayStartMs) continue;
-    const key = Math.floor(t / (5 * 60 * 1000));
-    windows[key] = (windows[key] || 0) + 1;
-  }
-  const activeWindows = Object.values(windows).filter(c => c >= 2).length;
-  return activeWindows * 5;
-}
 
 // Fetch logs from NextDNS API for a given profile. Returns null on any failure.
 async function fetchNextDNSLogs(profileId, apiKey) {
@@ -613,12 +408,44 @@ const WeekBars = ({ data, color, compact = true }) => {
 
 const FREE_VISIBLE = 3; // app rows shown unblurred for free users
 
+// Small inline icon + label shown below the domain name.
+const ViaIcon = ({ type }) => {
+  if (type === 'browser') {
+    return (
+      <Svg width={10} height={10} viewBox="0 0 10 10">
+        <Rect x="0.5" y="0.5" width="9" height="9" rx="1.5" stroke="#BBBBCC" strokeWidth="1" fill="none" />
+        <Path d="M0.5 3h9" stroke="#BBBBCC" strokeWidth="0.8" />
+        <Circle cx="2" cy="1.8" r="0.6" fill="#BBBBCC" />
+        <Circle cx="3.5" cy="1.8" r="0.6" fill="#BBBBCC" />
+      </Svg>
+    );
+  }
+  if (type === 'app') {
+    return (
+      <Svg width={10} height={10} viewBox="0 0 10 10">
+        <Rect x="2.5" y="0.5" width="5" height="9" rx="1.5" stroke="#BBBBCC" strokeWidth="1" fill="none" />
+        <Circle cx="5" cy="8" r="0.65" fill="#BBBBCC" />
+        <Path d="M3.8 0.5h2.4" stroke="#BBBBCC" strokeWidth="0.8" strokeLinecap="round" />
+      </Svg>
+    );
+  }
+  return null;
+};
+
 const AppRow = ({ app, maxM, color }) => (
   <View style={s.appItem}>
     <View style={s.appTop}>
       <View style={s.appLeft}>
         <AppIcon d={app.d} s={20} />
-        <Text style={s.appName} numberOfLines={1}>{app.name}</Text>
+        <View style={s.appNameCol}>
+          <Text style={s.appName} numberOfLines={1}>{app.name}</Text>
+          {app.via != null && (
+            <View style={s.viaRow}>
+              <ViaIcon type={app.via} />
+              <Text style={s.viaTxt}>{app.via === 'browser' ? 'Browser' : 'App'}</Text>
+            </View>
+          )}
+        </View>
       </View>
       <Text style={[s.appDur, { color }]}>{app.dur}</Text>
     </View>
@@ -948,7 +775,15 @@ const DetailScreen = ({ person, onBack }) => {
                 <AppIcon d={app.d} s={44} />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <View style={s.detailAppHead}>
-                    <Text style={s.detailAppName}>{app.name}</Text>
+                    <View>
+                      <Text style={s.detailAppName}>{app.name}</Text>
+                      {app.via != null && (
+                        <View style={s.viaRow}>
+                          <ViaIcon type={app.via} />
+                          <Text style={s.viaTxt}>{app.via === 'browser' ? 'Browser' : 'App'}</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={[s.detailAppDur, { color: person.color }]}>{app.dur}</Text>
                   </View>
                   <View style={s.barBgLg}>
@@ -974,7 +809,9 @@ export default function HomeScreen() {
   const [people, setPeople]           = useState(PEOPLE);
   const [isPaid, setIsPaid]           = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
-  const credentialsRef = useRef({ my: null, partner: null });
+  const credentialsRef      = useRef({ my: null, partner: null });
+  const myUserIdRef         = useRef(null);
+  const partnerUserIdRef    = useRef(null);
 
   // Show paywall 30 s after mount, at most once per 24 h, never during onboarding.
   useEffect(() => {
@@ -1005,67 +842,81 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      function applyLogs(myLogs, partnerLogs, myName, partnerName, myAvatar, partnerAvatar) {
+      // Refresh-only: update logs/screenTime in place using real Supabase UUIDs, never hardcoded strings.
+      function applyLogs(myLogs, partnerLogs) {
+        const myId = myUserIdRef.current;
+        const pid  = partnerUserIdRef.current;
         setPeople(prev => prev.map(p => {
-          if (p.id === 'me') {
-            const apps = myLogs ? buildApps(myLogs) : [];
-            const screenTimeMins = myLogs ? calcScreenTimeToday(myLogs) : null;
-            const lastSeenAt = getLastSeenAt(myLogs);
-            const update = { ...p, lastSeenAt };
-            if (myName) update.name = myName;
-            if (apps.length > 0) update.apps = apps;
-            if (screenTimeMins !== null) update.screenTime = formatMins(screenTimeMins);
-            if (myAvatar) update.avatarConfig = myAvatar;
-            return update;
+          const isMe      = myId && p.id === myId;
+          const isPartner = pid  && p.id === pid;
+          if (!isMe && !isPartner) return p;
+          const logs           = isMe ? myLogs : partnerLogs;
+          const screenTimeMins = logs ? calcScreenTimeToday(logs) : null;
+          const update = { ...p, lastSeenAt: logs ? getLastSeenAt(logs) : p.lastSeenAt };
+          if (logs !== null) {
+            update.apps       = buildApps(logs);
+            update.screenTime = screenTimeMins !== null ? formatMins(screenTimeMins) : '0m';
           }
-          if (p.id === 'dylan') {
-            const apps = partnerLogs ? buildApps(partnerLogs) : [];
-            const screenTimeMins = partnerLogs ? calcScreenTimeToday(partnerLogs) : null;
-            const lastSeenAt = getLastSeenAt(partnerLogs);
-            const update = { ...p, lastSeenAt };
-            if (partnerName) update.name = partnerName;
-            if (apps.length > 0) update.apps = apps;
-            if (screenTimeMins !== null) update.screenTime = formatMins(screenTimeMins);
-            if (partnerAvatar) update.avatarConfig = partnerAvatar;
-            return update;
-          }
-          return p;
+          return update;
         }));
       }
 
       async function loadRealData() {
         console.log('[HomeScreen] useFocusEffect fired — loading per-user data');
 
-        // Step 1: read only the logged-in user's Supabase ID from AsyncStorage.
-        const userId = await AsyncStorage.getItem('userId');
+        // Step 1: read only the logged-in user's ID from AsyncStorage.
+        let userId;
+        try { userId = await AsyncStorage.getItem('userId'); } catch (err) {
+          console.log('[HomeScreen] AsyncStorage error:', err.message); return;
+        }
         if (!userId) { console.log('[HomeScreen] no userId — using mock'); return; }
 
         // Step 2: fetch the logged-in user's own row, including partner_id.
+        // On any failure keep myRow null and continue — last rendered data stays visible.
         const avatarSelect = 'name, partner_id, nextdns_profile_id, nextdns_api_key, hair_style, hair_color, skin_tone, eye_style, mouth_style, accessory';
-        const { data: myRow, error: myErr } = await supabase
-          .from('users')
-          .select(avatarSelect)
-          .eq('id', userId)
-          .single();
-        if (myErr) console.log('[HomeScreen] my row error:', myErr.message);
+        let myRow = null;
+        try {
+          const { data, error } = await supabase
+            .from('users').select(avatarSelect).eq('id', userId).single();
+          if (error) console.log('[HomeScreen] my row error:', error.message);
+          else myRow = data;
+        } catch (err) {
+          console.log('[HomeScreen] my row fetch threw:', err.message);
+        }
 
-        // Step 3: use partner_id from the user's own Supabase row (not AsyncStorage).
+        // Step 3: fetch partner row using partner_id from Supabase — never from AsyncStorage.
         const partnerId = myRow?.partner_id ?? null;
-        const { data: partnerRow, error: partnerErr } = partnerId
-          ? await supabase.from('users').select(avatarSelect).eq('id', partnerId).single()
-          : { data: null, error: null };
-        if (partnerErr) console.log('[HomeScreen] partner row error:', partnerErr.message);
+        let partnerRow = null;
+        if (partnerId) {
+          try {
+            const { data, error } = await supabase
+              .from('users').select(avatarSelect).eq('id', partnerId).single();
+            if (error) console.log('[HomeScreen] partner row error:', error.message);
+            else partnerRow = data;
+          } catch (err) {
+            console.log('[HomeScreen] partner row fetch threw:', err.message);
+          }
+        }
 
         credentialsRef.current = {
           my: myRow ? { profileId: myRow.nextdns_profile_id, apiKey: myRow.nextdns_api_key } : null,
           partner: partnerRow ? { profileId: partnerRow.nextdns_profile_id, apiKey: partnerRow.nextdns_api_key } : null,
         };
+        myUserIdRef.current      = userId;
+        partnerUserIdRef.current = partnerId;
 
-        // Load my avatar from AsyncStorage (reflects edits made in Avatar Builder immediately)
-        const [[, hs], [, hc], [, st], [, es], [, ms], [, ac]] = await AsyncStorage.multiGet([
-          'avatarHairStyle', 'avatarHairColor', 'avatarSkinTone',
-          'avatarEyeStyle', 'avatarMouthStyle', 'avatarAccessory',
-        ]);
+        // Load avatar from AsyncStorage — reflects Avatar Builder edits immediately.
+        let hs, hc, st, es, ms, ac;
+        try {
+          const [[, _hs], [, _hc], [, _st], [, _es], [, _ms], [, _ac]] = await AsyncStorage.multiGet([
+            'avatarHairStyle', 'avatarHairColor', 'avatarSkinTone',
+            'avatarEyeStyle', 'avatarMouthStyle', 'avatarAccessory',
+          ]);
+          hs = _hs; hc = _hc; st = _st; es = _es; ms = _ms; ac = _ac;
+        } catch (err) {
+          console.log('[HomeScreen] avatar AsyncStorage error:', err.message);
+        }
+
         const myAvatar = {
           hairStyle:  hs || myRow?.hair_style  || AVATAR_DEFAULTS.hairStyle,
           hairColor:  hc || myRow?.hair_color  || '#E85D75',
@@ -1083,35 +934,69 @@ export default function HomeScreen() {
           accessory:  partnerRow.accessory   || AVATAR_DEFAULTS.accessory,
         } : null;
 
-        // Log each card's profile ID before fetching — if they are the same, the Supabase fetch is wrong.
         console.log('[HomeScreen] ME card     — NextDNS profileId:', myRow?.nextdns_profile_id ?? 'MISSING');
         console.log('[HomeScreen] PARTNER card — NextDNS profileId:', partnerRow?.nextdns_profile_id ?? 'MISSING');
-        if (
-          myRow?.nextdns_profile_id != null &&
-          myRow?.nextdns_profile_id === partnerRow?.nextdns_profile_id
-        ) {
+        if (myRow?.nextdns_profile_id != null && myRow?.nextdns_profile_id === partnerRow?.nextdns_profile_id) {
           console.log('[HomeScreen] WARNING: both profile IDs are identical — Supabase fetch is returning the same row for both users!');
         }
 
-        // Step 4: make two completely separate NextDNS API calls using each person's own credentials.
-        // Left card = logged-in user (me). Right card = partner.
+        // Step 4: separate NextDNS API calls — fetchNextDNSLogs already returns null on failure.
         const myLogs      = await fetchNextDNSLogs(myRow?.nextdns_profile_id, myRow?.nextdns_api_key);
         const partnerLogs = await fetchNextDNSLogs(partnerRow?.nextdns_profile_id, partnerRow?.nextdns_api_key);
-
         console.log('[HomeScreen] ME logs:', myLogs?.length ?? 'null', '| PARTNER logs:', partnerLogs?.length ?? 'null');
-        applyLogs(myLogs, partnerLogs, myRow?.name, partnerRow?.name, myAvatar, partnerAvatar);
+
+        const myApps      = myLogs      ? buildApps(myLogs)      : [];
+        const partnerApps = partnerLogs ? buildApps(partnerLogs) : [];
+        const myScreenTimeMins      = myLogs      ? calcScreenTimeToday(myLogs)      : null;
+        const partnerScreenTimeMins = partnerLogs ? calcScreenTimeToday(partnerLogs) : null;
+
+        // Build both cards from scratch. Left = logged-in user (UUID-keyed). Right = partner.
+        setPeople([
+          {
+            id:           userId,
+            name:         myRow?.name || 'You',
+            color:        P.red,
+            pale:         P.redPale,
+            lastSeenAt:   getLastSeenAt(myLogs),
+            avatarConfig: myAvatar,
+            screenTime:   myLogs !== null ? (myScreenTimeMins !== null ? formatMins(myScreenTimeMins) : '0m') : '—',
+            streak:       12,
+            avgTime:      '3h 45m',
+            longestDay:   '5h 30m',
+            week:         [252, 210, 290, 180, 320, 180, 145],
+            apps:         myApps,
+          },
+          {
+            id:           partnerId || 'partner',
+            name:         partnerRow?.name || 'Partner',
+            color:        P.blue,
+            pale:         P.bluePale,
+            lastSeenAt:   getLastSeenAt(partnerLogs),
+            avatarConfig: partnerAvatar || { ...AVATAR_DEFAULTS, hairStyle: 'short', hairColor: '#1A4A6A', skinTone: '#D4EEFA' },
+            screenTime:   partnerLogs !== null ? (partnerScreenTimeMins !== null ? formatMins(partnerScreenTimeMins) : '0m') : '—',
+            streak:       12,
+            avgTime:      '3h 20m',
+            longestDay:   '4h 55m',
+            week:         [227, 195, 240, 260, 185, 220, 310],
+            apps:         partnerApps,
+          },
+        ]);
       }
 
-      loadRealData().catch(err => console.log('[HomeScreen] error:', err.message));
+      loadRealData().catch(err => console.log('[HomeScreen] loadRealData unhandled:', err.message));
 
       const interval = setInterval(async () => {
-        const { my, partner } = credentialsRef.current;
-        if (!my?.profileId) return;
-        const [myLogs, partnerLogs] = await Promise.all([
-          fetchNextDNSLogs(my.profileId, my.apiKey),
-          fetchNextDNSLogs(partner?.profileId, partner?.apiKey),
-        ]);
-        applyLogs(myLogs, partnerLogs, null, null);
+        try {
+          const { my, partner } = credentialsRef.current;
+          if (!my?.profileId) return;
+          const [myLogs, partnerLogs] = await Promise.all([
+            fetchNextDNSLogs(my.profileId, my.apiKey),
+            fetchNextDNSLogs(partner?.profileId, partner?.apiKey),
+          ]);
+          applyLogs(myLogs, partnerLogs);
+        } catch (err) {
+          console.log('[HomeScreen] interval refresh error:', err.message);
+        }
       }, 60000);
 
       return () => clearInterval(interval);
@@ -1197,8 +1082,11 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 3,
   },
-  appLeft: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
-  appName: { fontSize: 10.5, fontWeight: '600', color: P.dark, flex: 1 },
+  appLeft: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, flex: 1 },
+  appNameCol: { flex: 1 },
+  appName: { fontSize: 10.5, fontWeight: '600', color: P.dark },
+  viaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  viaTxt: { fontSize: 9, color: '#BBBBCC', fontWeight: '500' },
   appDur: { fontSize: 10, fontWeight: '700' },
   barBg: { height: 3, backgroundColor: '#EEECF8', borderRadius: 2, overflow: 'hidden' },
   barFg: { height: '100%', borderRadius: 2 },
